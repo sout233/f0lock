@@ -1,0 +1,17 @@
+[package]
+name = "stft"
+version = "0.1.0"
+edition = "2024"
+license = "ISC"
+repository = "https://codeberg.org/RustAudio/nice-plug"
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nice-plug = { path = "../../crates/nice-plug", version = "0.4.1", features = [
+    "assert_process_allocs",
+] }
+realfft = "3.0"

@@ -1,0 +1,38 @@
+[package]
+name = "byo_gui_gl"
+version = "0.1.0"
+edition = "2024"
+license = "ISC"
+repository = "https://codeberg.org/RustAudio/nice-plug"
+authors = ["Billy Messenger <60663878+BillyDM@users.noreply.github.com>"]
+description = "A simple example plugin with a raw OpenGL context for rendering"
+publish = false
+
+[lib]
+# The `lib` artifact is needed for the standalone target
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+nice-plug = { path = "../../crates/nice-plug", version = "0.4.2", features = [
+    "assert_process_allocs",
+    "standalone",
+    # Allows editors to use a workaround to fix broken dpi scaling issues on Windows when running in
+    # standalone mode (see: https://github.com/RustAudio/baseview/issues/321)
+    #
+    # This is generally safe to enable for most plugins. The only case where it *should not*
+    # be enabled is if your plugin hosts other plugins.
+    #
+    # More specifically, do *NOT* enable this if any of the following applies:
+    # * Multiple `baseview` versions are present in the final binary
+    # * `baseview` is being used in conjunction with other platform windowing libraries (e.g. `winit`, `SDL`, etc.)
+    # * The current process may host other plugins that need to interact with the platform's GUI capabilities
+    "unsafe_standalone_dpi_fix",
+    "tracing-subscriber",
+] }
+baseview = { version = "0.4.1", features = ["opengl", "tracing"] }
+glow = "0.18"
+crossbeam = "0.8"
+atomic_float = "1.1"
+# To make the state persistable
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"

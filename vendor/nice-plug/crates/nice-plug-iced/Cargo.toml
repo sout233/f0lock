@@ -1,0 +1,93 @@
+[package]
+name = "nice-plug-iced"
+version = "0.5.0"
+description = "An adapter to use iced GUIs with nice-plug"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["gui", "nice-plug", "plugin", "clap", "vst3"]
+categories = ["gui"]
+
+[features]
+default = [
+    "wgpu",
+    "tiny-skia",
+    "crisp",
+    "web-colors",
+    "thread-pool",
+    "fira-sans",
+    "x11",
+]
+# Enables the `wgpu` GPU-accelerated renderer with all its default features (Vulkan, Metal, DX12, OpenGL, and WebGPU)
+# This can be disabled if you wish to reduce the binary size of plugins with simple GUIs.
+wgpu = ["iced_baseview/wgpu"]
+# Enables the `wgpu` GPU-accelerated renderer with the minimum required features (no backends!)
+wgpu-bare = ["iced_baseview/wgpu-bare"]
+# Enables the `tiny-skia` software renderer for compatibility with older systems. Disable this when using custom shaders.
+tiny-skia = ["iced_baseview/tiny-skia"]
+# Enables the `image` widget
+image = ["iced_baseview/image"]
+# Enables the `image` widget, without any built-in codecs of the `image` crate
+image-without-codecs = ["iced_baseview/image-without-codecs"]
+# Enables the `svg` widget
+svg = ["iced_baseview/svg"]
+# Enables the `canvas` widget
+canvas = ["iced_baseview/canvas"]
+# Enables the `qr_code` widget
+qr_code = ["iced_baseview/qr_code"]
+# Enables the `markdown` widget
+markdown = ["iced_baseview/markdown"]
+# Enables lazy widgets
+lazy = ["iced_baseview/lazy"]
+# Enables debug metrics (press F12)
+debug = ["iced_baseview/debug", "iced_program/debug"]
+# Enables time-travel debugging (very experimental!)
+time-travel = ["iced_baseview/time-travel", "iced_program/time-travel"]
+# Enables hot reloading (very experimental!)
+hot = ["iced_baseview/hot"]
+# Enables the `thread-pool` futures executor as the `executor::Default`
+thread-pool = ["iced_baseview/thread-pool"]
+# Enables `tokio` as the `executor::Default`
+tokio = ["iced_baseview/tokio"]
+# Enables `smol` as the `executor::Default`
+smol = ["iced_baseview/smol"]
+# Enables querying system information
+sysinfo = ["iced_baseview/sysinfo"]
+# Enables broken "sRGB linear" blending to reproduce color management of the Web
+web-colors = ["iced_baseview/web-colors"]
+# Enables pixel snapping for crisp edges by default (can cause jitter!)
+crisp = ["iced_baseview/crisp"]
+# Enables syntax highlighting
+highlighter = ["iced_baseview/highlighter"]
+# Enables the `widget::selector` module
+selector = ["iced_baseview/selector"]
+# Enables the advanced module
+advanced = ["iced_baseview/advanced"]
+# Embeds Fira Sans into the final application; useful as an easy way to have consistent looks between platforms
+fira-sans = ["iced_baseview/fira-sans"]
+# Enables basic text shaping by default
+basic-shaping = ["iced_baseview/basic-shaping"]
+# Enables advanced text shaping by default
+advanced-shaping = ["iced_baseview/advanced-shaping"]
+# Enables strict assertions for debugging purposes at the expense of performance
+strict-assertions = ["iced_baseview/strict-assertions"]
+# Redraws on every runtime event, and not only when a widget requests it
+unconditional-rendering = ["iced_baseview/unconditional-rendering"]
+# Enables support for the `sipper` library
+sipper = ["iced_baseview/sipper"]
+# Enables the Unix X11 backend
+x11 = ["iced_baseview/x11"]
+
+[dependencies]
+raw-window-handle.workspace = true
+nice-plug-core = { path = "../../crates/nice-plug-core", version = "0.4.2" }
+iced_futures = "0.14"
+iced_debug = "0.14"
+iced_program = "0.14"
+#iced_baseview = { git = "https://codeberg.org/RustAudio/iced_baseview.git", rev = "8ebc8f74d62bddb44bb091625832b9df3d15c178", default-features = false, features = [
+iced_baseview = { version = "0.6.0", default-features = false, features = [
+    "tracing",
+] }
+crossbeam-utils = "0.8"
+# To make the state persistable
+serde.workspace = true

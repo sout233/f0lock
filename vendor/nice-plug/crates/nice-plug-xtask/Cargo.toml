@@ -1,0 +1,18 @@
+[package]
+name = "nice-plug-xtask"
+version = "0.1.1"
+edition.workspace = true
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+description = "nice-plug's cargo xtask command, as a library"
+license.workspace = true
+repository.workspace = true
+categories = ["multimedia::audio"]
+keywords = ["plugin", "clap", "vst3"]
+
+[dependencies]
+anyhow.workspace = true
+cargo_metadata = "0.23.1"
+goblin = "0.10.5"
+reflink-copy = "0.1.29"
+serde.workspace = true
+toml = "1.1"

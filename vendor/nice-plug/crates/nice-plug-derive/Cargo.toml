@@ -1,0 +1,17 @@
+[package]
+name = "nice-plug-derive"
+version = "0.1.2"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Proc macros for the nice-plug framework"
+keywords = ["audio", "plugin", "vst", "vst3"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0", features = ["extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"

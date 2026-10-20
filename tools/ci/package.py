@@ -66,8 +66,8 @@ def populate(stage, platform):
     licenses.mkdir()
     sources = {
         "Ubuntu-UFL.txt": ROOT / "assets/fonts/UFL.txt",
-        "nice-plug-ISC.txt": ROOT.parent / "f0lock_vendor/nice-plug/LICENSE",
-        "pitch-estimate-MIT.txt": ROOT.parent / "f0lock_vendor/pitch-estimate/LICENSE",
+        "nice-plug-ISC.txt": ROOT / "vendor/nice-plug/LICENSE",
+        "pitch-estimate-MIT.txt": ROOT / "vendor/pitch-estimate/LICENSE",
     }
     for name in ["baseview", "egui-baseview"]:
         for license_name in ["MIT", "APACHE"]:

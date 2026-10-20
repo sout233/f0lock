@@ -1,0 +1,74 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/nice-plug",
+  "crates/nice-plug-core",
+  "crates/nice-plug-derive",
+  "crates/nice-plug-xtask",
+  "crates/nice-log",
+  "crates/cargo-nice-plug",
+  "crates/xtask",
+  "crates/nice-plug-egui",
+  "crates/nice-plug-iced",
+
+  "examples/byo_gui_gl",
+  "examples/byo_gui_softbuffer",
+  "examples/byo_gui_wgpu",
+  "examples/gain",
+  "examples/gain_egui",
+  "examples/gain_iced",
+  "examples/iced_audio_widget",
+  "examples/midi_inverter",
+  "examples/poly_mod_synth",
+  "examples/sine",
+  "examples/stft",
+  "examples/sysex",
+]
+default-members = ["crates/nice-plug"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88"
+authors = [
+  "Robbert van der Helm <mail@robbertvanderhelm.nl>",
+  "Billy Messenger <billydm@noreply.codeberg.org>",
+]
+license = "ISC"
+repository = "https://codeberg.org/RustAudio/nice-plug"
+
+[workspace.dependencies]
+anyhow = "1.0.104"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+atomic_float = "1.1"
+atomic_refcell = "0.1"
+bitflags = "2"
+raw-window-handle = "0.6"
+approx = "0.5.1"
+crossbeam = "0.8"
+rtrb = "0.4.0"
+parking_lot = "0.12"
+thiserror = "2"
+windows = ">=0.59, <=0.62"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["smallvec", "fmt", "tracing-log", "std"] }
+
+# Enable a small amount of optimization in the dev profile.
+[profile.dev]
+opt-level = 1
+
+# Enable more optimization in the release profile at the cost of compile time.
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"
+
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = "none"
+
+[profile.ci]
+inherits = "dev"
+opt-level = 0
+debug = 0

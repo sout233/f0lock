@@ -1,0 +1,20 @@
+[package]
+name = "midi_inverter"
+version = "0.1.0"
+edition = "2024"
+license = "ISC"
+repository = "https://codeberg.org/RustAudio/nice-plug"
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+publish = false
+
+[lib]
+# The `lib` artifact is needed for the standalone target
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+nice-plug = { path = "../../crates/nice-plug", version = "0.4.1", default-features = false, features = [
+    "vst3",
+    "tracing-subscriber",
+    "assert_process_allocs",
+    "standalone",
+] }

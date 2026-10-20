@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="24"
+   height="24"
+   viewBox="0 0 24 24"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:cc="http://creativecommons.org/ns#">
+  <defs
+     id="defs1" />
+  <rect
+     style="fill:#d54247;fill-opacity:1;stroke-width:1.5;stroke-linecap:round"
+     id="rect1"
+     width="24"
+     height="16"
+     x="-24"
+     y="4"
+     rx="2.5625"
+     ry="2.5625"
+     transform="scale(-1,1)" />
+  <g
+     id="g1"
+     transform="translate(0.08812816)">
+    <path
+       id="path1"
+       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:4.96512"
+       d="m 21.698126,9.2325583 c 0.503706,0 -0.04088,0.9858287 -0.04073,1.4895347 0,3.016373 -2.196998,5.461628 -5.213372,5.461628 -3.01637,0 -5.21337,-2.445255 -5.21337,-5.461628 -4.74e-4,-0.503615 -0.546283,-1.4895347 -0.04269,-1.4895347 z m -3.822751,3.0537787 c -0.358571,0.375137 -0.856605,0.606872 -1.419713,0.607064 -0.563108,-1.92e-4 -1.061142,-0.231927 -1.419713,-0.607064 -0.283828,-0.29785 -0.7554,-0.309134 -1.053149,-0.0252 -0.297854,0.283824 -0.309142,0.755396 -0.02521,1.053148 0.627997,0.657001 1.520729,1.068324 2.498074,1.068649 0.977345,-3.25e-4 1.868138,-0.411648 2.496135,-1.068662 0.284449,-0.297223 0.274027,-0.768781 -0.02327,-1.053148 -0.142887,-0.136261 -0.334034,-0.210208 -0.531553,-0.205582 -0.19752,0.0046 -0.385215,0.08766 -0.521596,0.230794 z" />
+    <path
+       id="circle2"
+       style="fill:none;stroke:#ffffff;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
+       d="m 15.57562,15.6483 c -0.66221,0.773903 -1.585573,1.254159 -2.606977,1.254159 -2.014734,0 -3.647999,-1.868578 -3.647999,-4.173579 m 0,0 c 0,-2.305003 -0.878311,-4.1735765 -2.893046,-4.1735765 -2.014732,0 -2.892677,1.8904335 -2.892677,6.6353945 0,-4.749391 -0.09235,-6.5763369 -0.784921,-6.6355708" />
+    <path
+       style="fill:#000000;stroke:#ffffff;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="M 18.678526,9.2325583 V 6.75"
+       id="path3" />
+    <path
+       style="fill:#000000;stroke:#ffffff;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       d="M 14.209922,9.2325583 V 6.75"
+       id="path4" />
+  </g>
+  <metadata
+     id="metadata1">
+    <rdf:RDF>
+      <cc:License
+         rdf:about="http://creativecommons.org/licenses/by-sa/4.0/">
+        <cc:permits
+           rdf:resource="http://creativecommons.org/ns#Reproduction" />
+        <cc:permits
+           rdf:resource="http://creativecommons.org/ns#Distribution" />
+        <cc:requires
+           rdf:resource="http://creativecommons.org/ns#Notice" />
+        <cc:requires
+           rdf:resource="http://creativecommons.org/ns#Attribution" />
+        <cc:permits
+           rdf:resource="http://creativecommons.org/ns#DerivativeWorks" />
+        <cc:requires
+           rdf:resource="http://creativecommons.org/ns#ShareAlike" />
+      </cc:License>
+      <cc:Work
+         rdf:about="">
+        <cc:license
+           rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+</svg>

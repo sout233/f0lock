@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [workspace]
 members = ["xtask"]
+exclude = ["vendor/nice-plug", "vendor/pitch-estimate"]
 resolver = "3"
 
 [features]
@@ -21,17 +22,17 @@ name = "f0lock"
 required-features = ["standalone"]
 
 [dependencies]
-nice-plug = { path = "../f0lock_vendor/nice-plug/crates/nice-plug", features = ["assert_process_allocs", "unsafe_flush_denormals"] }
+nice-plug = { path = "vendor/nice-plug/crates/nice-plug", features = ["assert_process_allocs", "unsafe_flush_denormals"] }
 egui = { version = "0.37", features = ["default_fonts"] }
 realfft = "3.5"
-pitch-estimate = { path = "../f0lock_vendor/pitch-estimate" }
+pitch-estimate = { path = "vendor/pitch-estimate" }
 
 [target.'cfg(windows)'.dependencies]
-nice-plug-egui = { path = "../f0lock_vendor/nice-plug/crates/nice-plug-egui", default-features = false, features = ["wgpu"] }
+nice-plug-egui = { path = "vendor/nice-plug/crates/nice-plug-egui", default-features = false, features = ["wgpu"] }
 egui-wgpu = { version = "0.37", default-features = false }
 
 [target.'cfg(not(windows))'.dependencies]
-nice-plug-egui = { path = "../f0lock_vendor/nice-plug/crates/nice-plug-egui" }
+nice-plug-egui = { path = "vendor/nice-plug/crates/nice-plug-egui" }
 
 [dev-dependencies]
 serde_json = "1.0"

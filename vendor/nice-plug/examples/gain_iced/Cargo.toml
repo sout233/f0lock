@@ -1,0 +1,35 @@
+[package]
+name = "gain_iced"
+version = "0.1.0"
+authors = [
+    "Billy Messenger <billydm@noreply.codeberg.org>",
+    "Robbert van der Helm <mail@robbertvanderhelm.nl>",
+]
+description = "A simple gain plugin with an egui GUI"
+edition = "2024"
+license = "ISC"
+repository = "https://codeberg.org/RustAudio/nice-plug"
+publish = false
+
+[lib]
+# The `lib` artifact is needed for the standalone target
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+nice-plug = { path = "../../crates/nice-plug", version = "0.4.2", features = [
+    "assert_process_allocs",
+    "standalone",
+    # Allows editors to use a workaround to fix broken dpi scaling issues on Windows when running in
+    # standalone mode (see: https://github.com/RustAudio/baseview/issues/321)
+    #
+    # This is generally safe to enable for most plugins. The only case where it *should not*
+    # be enabled is if your plugin hosts other plugins.
+    #
+    # More specifically, do *NOT* enable this if any of the following applies:
+    # * Multiple `baseview` versions are present in the final binary
+    # * `baseview` is being used in conjunction with other platform windowing libraries (e.g. `winit`, `SDL`, etc.)
+    # * The current process may host other plugins that need to interact with the platform's GUI capabilities
+    "unsafe_standalone_dpi_fix",
+] }
+nice-plug-iced = { path = "../../crates/nice-plug-iced", version = "0.5.0" }
+atomic_float = "1.1"

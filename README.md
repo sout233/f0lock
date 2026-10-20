@@ -6,16 +6,13 @@ fundamental-tracking dynamic EQ built on nice-plug
 
 ## building & installing
 
-lay like:
-
-```text
-D:/f0lock/
-D:/f0lock_vendor/nice-plug/
-D:/f0lock_vendor/pitch-estimate/
-```
+Install Rust and your platform's native build tools (MSVC on Windows).
+The patched dependencies are included in `vendor/`; no sibling folders or submodules are needed.
 
 ```powershell
-cargo xtask bundle f0lock --release
+git clone https://github.com/sout233/f0lock.git
+cd f0lock
+cargo xtask bundle f0lock --release --locked
 ```
 
 spits out `target/bundled/f0lock.clap` and `target/bundled/f0lock.vst3/`.

@@ -1,0 +1,1368 @@
+{
+ "schema": "pitch-conformance-signals/1",
+ "frozen": true,
+ "generator": {
+  "sample_formula": "x[i] = dc + sum_k amp_k * sin(2*pi*freq_k*i/sample_rate + phase_k) + noise_amp * lcg(i)",
+  "noise_lcg": {
+   "kind": "MMIX LCG, 64-bit wrapping",
+   "a": "6364136223846793005",
+   "c": "1442695040888963407",
+   "update": "state = (state * a + c) mod 2^64; advance BEFORE first sample",
+   "sample": "((state >> 11) / 2^53) * 2 - 1  -> [-1, 1)",
+   "seed": "per-signal lcg_seed field"
+  },
+  "fingerprint_rule": "regenerated first_8 must match within 1e-6 abs; sum_sq within 1e-3 rel"
+ },
+ "reference_params": {
+  "mpm": {
+   "window": 4096,
+   "tau_max": 2048,
+   "k_relative_threshold": 0.93,
+   "peak_correction": "parabolic"
+  },
+  "yin": {
+   "frame": 4096,
+   "integration_window_W": 2048,
+   "tau_max": 2048,
+   "absolute_threshold": 0.1,
+   "peak_correction": "parabolic",
+   "clarity": "clamp(1 - d'(tau*), 0, 1)"
+  }
+ },
+ "signals": [
+  {
+   "id": "sine_55",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 55.0,
+     "amp": 1.0,
+     "phase_rad": 0.7
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 55.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 55.0,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    },
+    "yin": {
+     "f0_hz": 55.0,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "55 Hz sine. Period lag is about 802 samples at 44100 Hz and 873 samples at 48000 Hz.",
+   "fingerprint": {
+    "first_8": [
+     0.644217687,
+     0.650191282,
+     0.656124951,
+     0.662018331,
+     0.667871059,
+     0.673682777,
+     0.679453127,
+     0.685181755
+    ],
+    "sum_sq": 4153.797512
+   }
+  },
+  {
+   "id": "sine_82.41",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 82.41,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 82.41,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 82.41,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 82.4101,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "E2, low guitar string.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.011741166,
+     0.023480713,
+     0.035217023,
+     0.046948477,
+     0.05867346,
+     0.070390354,
+     0.082097544
+    ],
+    "sum_sq": 4109.834534
+   }
+  },
+  {
+   "id": "sine_110",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 110.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 110.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 110.0,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 110.0003,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.015671703,
+     0.031339556,
+     0.046999712,
+     0.062648324,
+     0.078281549,
+     0.093895546,
+     0.109486481
+    ],
+    "sum_sq": 4107.740778
+   }
+  },
+  {
+   "id": "sine_146.83",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 146.83,
+     "amp": 1.0,
+     "phase_rad": 1.1
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 146.83,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 146.8301,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    },
+    "yin": {
+     "f0_hz": 146.8306,
+     "clarity": 1.0,
+     "cents_error": 0.01
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.89120736,
+     0.900500772,
+     0.909400107,
+     0.917901471,
+     0.926001144,
+     0.933695582,
+     0.940981416,
+     0.947855459
+    ],
+    "sum_sq": 4113.014215
+   }
+  },
+  {
+   "id": "sine_220",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 220.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 219.9999,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 220.001,
+     "clarity": 1.0,
+     "cents_error": 0.01
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.031339556,
+     0.062648324,
+     0.093895546,
+     0.125050524,
+     0.156082651,
+     0.186961441,
+     0.217656558
+    ],
+    "sum_sq": 4103.659449
+   }
+  },
+  {
+   "id": "sine_440",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 440.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 440.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 439.9999,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 440.0187,
+     "clarity": 1.0,
+     "cents_error": 0.07
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.062648324,
+     0.125050524,
+     0.186961441,
+     0.248137848,
+     0.308339403,
+     0.367329594,
+     0.424876668
+    ],
+    "sum_sq": 4094.721294
+   }
+  },
+  {
+   "id": "sine_880",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 880.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 880.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 880.0024,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    },
+    "yin": {
+     "f0_hz": 880.169,
+     "clarity": 1.0,
+     "cents_error": 0.33
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.125050524,
+     0.248137848,
+     0.367329594,
+     0.480754541,
+     0.586632002,
+     0.683299781,
+     0.769240265
+    ],
+    "sum_sq": 4096.745894
+   }
+  },
+  {
+   "id": "complex_110_5h",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 110.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 220.0,
+     "amp": 0.5,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 330.0,
+     "amp": 0.3333333333333333,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 440.0,
+     "amp": 0.25,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 550.0,
+     "amp": 0.2,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 110.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.85,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 109.9998,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 110.0,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "Harmonic tone, amplitudes 1/k.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.078326442,
+     0.156441395,
+     0.234134291,
+     0.311196409,
+     0.387421779,
+     0.462608081,
+     0.53655752
+    ],
+    "sum_sq": 6013.448501
+   }
+  },
+  {
+   "id": "complex_220_8h",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 440.0,
+     "amp": 0.5,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 660.0,
+     "amp": 0.3333333333333333,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 880.0,
+     "amp": 0.25,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1100.0,
+     "amp": 0.2,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1320.0,
+     "amp": 0.16666666666666666,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1540.0,
+     "amp": 0.14285714285714285,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1760.0,
+     "amp": 0.125,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 220.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.85,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 219.9998,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 220.0005,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "Sawtooth-like tone, 8 harmonics.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.24971266,
+     0.493208992,
+     0.724533687,
+     0.938240477,
+     1.129614886,
+     1.294860776,
+     1.431241699
+    ],
+    "sum_sq": 6233.018314
+   }
+  },
+  {
+   "id": "noisy_220",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": {
+    "amp": 0.3,
+    "lcg_seed": 20260820
+   },
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 220.0,
+    "tol_cents": 20.0,
+    "clarity_min": 0.7,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 220.4114,
+     "clarity": 0.9447,
+     "cents_error": 3.23
+    },
+    "yin": {
+     "f0_hz": 220.362,
+     "clarity": 0.9436,
+     "cents_error": 2.85
+    }
+   },
+   "note": "SNR ~= 12 dB. Clarity must remain in [0,1].",
+   "fingerprint": {
+    "first_8": [
+     -0.040392776,
+     -0.069442663,
+     0.18277654,
+     0.007939515,
+     0.327843996,
+     0.152059048,
+     -0.02061992,
+     0.149813362
+    ],
+    "sum_sq": 4398.743658
+   }
+  },
+  {
+   "id": "octave_ambiguous_110",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 110.0,
+     "amp": 0.2,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 330.0,
+     "amp": 0.15,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 110.0,
+    "tol_cents": 20.0,
+    "clarity_min": 0.8,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 109.9999,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 110.0002,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "Energy concentrated at 220 Hz but true period is 1/110 s; octave-error probe.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.041523854,
+     0.083000567,
+     0.124383066,
+     0.165624405,
+     0.206677832,
+     0.247496855,
+     0.288035303
+    ],
+    "sum_sq": 4363.462109
+   }
+  },
+  {
+   "id": "noise_only",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [],
+   "noise": {
+    "amp": 1.0,
+    "lcg_seed": 424242
+   },
+   "dc": 0.0,
+   "expected": {
+    "expect_pitch": false
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 24.8873,
+     "clarity": 0.0632
+    },
+    "yin": null
+   },
+   "note": "If any pitch is emitted, its clarity MUST still lie in [0,1].",
+   "fingerprint": {
+    "first_8": [
+     0.574230319,
+     -0.502766393,
+     -0.371400036,
+     -0.265911786,
+     0.104910188,
+     -0.488139385,
+     0.582667739,
+     0.112562331
+    ],
+    "sum_sq": 2761.898457
+   }
+  },
+  {
+   "id": "dc_only",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [],
+   "noise": null,
+   "dc": 0.5,
+   "expected": {
+    "expect_pitch": false
+   },
+   "reference_measured": {
+    "mpm": null,
+    "yin": null
+   },
+   "note": "Constant frame: no pitch, no NaN, no panic.",
+   "fingerprint": {
+    "first_8": [
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5
+    ],
+    "sum_sq": 2048.0
+   }
+  },
+  {
+   "id": "all_zero",
+   "sample_rate": 44100,
+   "num_samples": 8192,
+   "components": [],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "expect_pitch": false
+   },
+   "reference_measured": {
+    "mpm": null,
+    "yin": null
+   },
+   "note": "Zero frame: no pitch, no NaN, no panic, no divide-by-zero.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sum_sq": 0.0
+   }
+  },
+  {
+   "id": "sine_55",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 55.0,
+     "amp": 1.0,
+     "phase_rad": 0.7
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 55.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 55.0,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    },
+    "yin": {
+     "f0_hz": 55.0,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "55 Hz sine. Period lag is about 802 samples at 44100 Hz and 873 samples at 48000 Hz.",
+   "fingerprint": {
+    "first_8": [
+     0.644217687,
+     0.649707412,
+     0.655163462,
+     0.660585553,
+     0.665973404,
+     0.671326736,
+     0.676645271,
+     0.681928735
+    ],
+    "sum_sq": 4131.266153
+   }
+  },
+  {
+   "id": "sine_82.41",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 82.41,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 82.41,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 82.41,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 82.41,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "E2, low guitar string.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.010787235,
+     0.021573214,
+     0.032356683,
+     0.043136386,
+     0.05391107,
+     0.06467948,
+     0.075440364
+    ],
+    "sum_sq": 4079.100639
+   }
+  },
+  {
+   "id": "sine_110",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 110.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 110.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 110.0,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 110.0001,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.014398469,
+     0.028793952,
+     0.043183466,
+     0.057564027,
+     0.071932653,
+     0.086286366,
+     0.100622189
+    ],
+    "sum_sq": 4100.528597
+   }
+  },
+  {
+   "id": "sine_146.83",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 146.83,
+     "amp": 1.0,
+     "phase_rad": 1.1
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 146.83,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 146.8301,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    },
+    "yin": {
+     "f0_hz": 146.8307,
+     "clarity": 1.0,
+     "cents_error": 0.01
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.89120736,
+     0.899760337,
+     0.907980945,
+     0.915866148,
+     0.923413032,
+     0.93061881,
+     0.93748082,
+     0.943996528
+    ],
+    "sum_sq": 4103.828953
+   }
+  },
+  {
+   "id": "sine_220",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 220.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 220.0,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    },
+    "yin": {
+     "f0_hz": 220.002,
+     "clarity": 1.0,
+     "cents_error": 0.02
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.028793952,
+     0.057564027,
+     0.086286366,
+     0.11493715,
+     0.143492622,
+     0.1719291,
+     0.200223004
+    ],
+    "sum_sq": 4091.155467
+   }
+  },
+  {
+   "id": "sine_440",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 440.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 440.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 439.9992,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 440.0172,
+     "clarity": 1.0,
+     "cents_error": 0.07
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.057564027,
+     0.11493715,
+     0.1719291,
+     0.22835087,
+     0.284015345,
+     0.33873792,
+     0.392337117
+    ],
+    "sum_sq": 4091.849875
+   }
+  },
+  {
+   "id": "sine_880",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 880.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 880.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.9,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 879.9974,
+     "clarity": 1.0,
+     "cents_error": -0.01
+    },
+    "yin": {
+     "f0_hz": 880.0532,
+     "clarity": 1.0,
+     "cents_error": 0.1
+    }
+   },
+   "note": "",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.11493715,
+     0.22835087,
+     0.33873792,
+     0.444635179,
+     0.544639035,
+     0.63742399,
+     0.721760228
+    ],
+    "sum_sq": 4094.031332
+   }
+  },
+  {
+   "id": "complex_110_5h",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 110.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 220.0,
+     "amp": 0.5,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 330.0,
+     "amp": 0.3333333333333333,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 440.0,
+     "amp": 0.25,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 550.0,
+     "amp": 0.2,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 110.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.85,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 109.9999,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 110.0,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    }
+   },
+   "note": "Harmonic tone, amplitudes 1/k.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.071967471,
+     0.1437709,
+     0.215246849,
+     0.286233089,
+     0.356569194,
+     0.426097135,
+     0.494661852
+    ],
+    "sum_sq": 5939.960348
+   }
+  },
+  {
+   "id": "complex_220_8h",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 440.0,
+     "amp": 0.5,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 660.0,
+     "amp": 0.3333333333333333,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 880.0,
+     "amp": 0.25,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1100.0,
+     "amp": 0.2,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1320.0,
+     "amp": 0.16666666666666666,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1540.0,
+     "amp": 0.14285714285714285,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 1760.0,
+     "amp": 0.125,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 220.0,
+    "tol_cents": 10.0,
+    "clarity_min": 0.85,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 219.9994,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 220.0006,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "Sawtooth-like tone, 8 harmonics.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.229572895,
+     0.454316966,
+     0.6695747,
+     0.871024003,
+     1.054828232,
+     1.217765913,
+     1.357334837
+    ],
+    "sum_sq": 6248.559819
+   }
+  },
+  {
+   "id": "noisy_220",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": {
+    "amp": 0.3,
+    "lcg_seed": 20260820
+   },
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 220.0,
+    "tol_cents": 20.0,
+    "clarity_min": 0.7,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 220.3644,
+     "clarity": 0.943,
+     "cents_error": 2.87
+    },
+    "yin": {
+     "f0_hz": 220.2843,
+     "clarity": 0.944,
+     "cents_error": 2.24
+    }
+   },
+   "note": "SNR ~= 12 dB. Clarity must remain in [0,1].",
+   "fingerprint": {
+    "first_8": [
+     -0.040392776,
+     -0.071988267,
+     0.177692243,
+     0.000330335,
+     0.317730622,
+     0.139469019,
+     -0.035652261,
+     0.132379807
+    ],
+    "sum_sq": 4362.799698
+   }
+  },
+  {
+   "id": "octave_ambiguous_110",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [
+    {
+     "freq_hz": 110.0,
+     "amp": 0.2,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 220.0,
+     "amp": 1.0,
+     "phase_rad": 0.0
+    },
+    {
+     "freq_hz": 330.0,
+     "amp": 0.15,
+     "phase_rad": 0.0
+    }
+   ],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "f0_hz": 110.0,
+    "tol_cents": 20.0,
+    "clarity_min": 0.8,
+    "expect_pitch": true
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 110.0,
+     "clarity": 1.0,
+     "cents_error": -0.0
+    },
+    "yin": {
+     "f0_hz": 110.0001,
+     "clarity": 1.0,
+     "cents_error": 0.0
+    }
+   },
+   "note": "Energy concentrated at 220 Hz but true period is 1/110 s; octave-error probe.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.038151166,
+     0.076265772,
+     0.114307301,
+     0.152239321,
+     0.190025526,
+     0.227629779,
+     0.265016158
+    ],
+    "sum_sq": 4320.1602
+   }
+  },
+  {
+   "id": "noise_only",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [],
+   "noise": {
+    "amp": 1.0,
+    "lcg_seed": 424242
+   },
+   "dc": 0.0,
+   "expected": {
+    "expect_pitch": false
+   },
+   "reference_measured": {
+    "mpm": {
+     "f0_hz": 27.0882,
+     "clarity": 0.0632
+    },
+    "yin": null
+   },
+   "note": "If any pitch is emitted, its clarity MUST still lie in [0,1].",
+   "fingerprint": {
+    "first_8": [
+     0.574230319,
+     -0.502766393,
+     -0.371400036,
+     -0.265911786,
+     0.104910188,
+     -0.488139385,
+     0.582667739,
+     0.112562331
+    ],
+    "sum_sq": 2761.898457
+   }
+  },
+  {
+   "id": "dc_only",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [],
+   "noise": null,
+   "dc": 0.5,
+   "expected": {
+    "expect_pitch": false
+   },
+   "reference_measured": {
+    "mpm": null,
+    "yin": null
+   },
+   "note": "Constant frame: no pitch, no NaN, no panic.",
+   "fingerprint": {
+    "first_8": [
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5,
+     0.5
+    ],
+    "sum_sq": 2048.0
+   }
+  },
+  {
+   "id": "all_zero",
+   "sample_rate": 48000,
+   "num_samples": 8192,
+   "components": [],
+   "noise": null,
+   "dc": 0.0,
+   "expected": {
+    "expect_pitch": false
+   },
+   "reference_measured": {
+    "mpm": null,
+    "yin": null
+   },
+   "note": "Zero frame: no pitch, no NaN, no panic, no divide-by-zero.",
+   "fingerprint": {
+    "first_8": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "sum_sq": 0.0
+   }
+  }
+ ]
+}

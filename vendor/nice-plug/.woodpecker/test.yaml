@@ -1,0 +1,52 @@
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+
+steps:
+  - name: tests-and-bundle
+    image: docker.io/library/rust:1-bookworm
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - apt-get update
+      - >-
+        apt-get install -y --no-install-recommends \
+          pkg-config \
+          libasound2-dev libgl-dev libjack-jackd2-dev \
+          libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev \
+          libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      # Run the tests (nice-plug and nice-plug-core are the only crates with tests).
+      - cargo test --profile ci -p nice-plug -p nice-plug-core
+      # Test that everything builds with the editor feature disabled
+      - cargo build --package midi_inverter
+      # Test that plugin bundling works. This by proxy also checks that the core
+      # crates compile: byo_gui_gl bundles both a plugin and a standalone target,
+      # and exercises the common OpenGL support.
+      - cargo xtask bundle -p byo_gui_gl --profile ci
+
+  - name: lint-and-docs
+    image: docker.io/library/rust:1-bookworm
+    environment:
+      CARGO_TERM_COLOR: always
+    commands:
+      - apt-get update
+      - >-
+        apt-get install -y --no-install-recommends \
+          pkg-config \
+          libasound2-dev libgl-dev libjack-jackd2-dev \
+          libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev \
+          libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - rustup component add clippy
+      # Run clippy and build the docs
+      - >-
+        cargo clippy --profile ci --workspace  --no-deps \
+          --exclude byo_gui_softbuffer --exclude byo_gui_wgpu \
+          --exclude gain_egui --exclude gain_iced \
+          --exclude nice-plug-egui --exclude nice-plug-iced \
+          -- -D warnings
+      - >-
+        RUSTDOCFLAGS="-D warnings" cargo doc --profile ci --workspace --no-deps \
+          --exclude byo_gui_softbuffer --exclude byo_gui_wgpu \
+          --exclude gain_egui --exclude gain_iced \
+          --exclude nice-plug-egui --exclude nice-plug-iced

@@ -1,0 +1,47 @@
+[package]
+name = "nice-plug-core"
+version = "0.4.2"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core types and traits used in the nice-plug plugin framework"
+keywords = ["plugin", "clap", "vst3"]
+categories = ["multimedia::audio"]
+
+# Show documentation with all features enabled on docs.rs
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["editor"]
+# Enables editor (GUI) support.
+editor = ["dep:dpi"]
+# Enabling this feature will cause the plugin to terminate when allocations
+# occur in the processing function during debug builds. Keep in mind that panics
+# may also allocate if they use string formatting, so temporarily disabling this
+# feature may be necessary when debugging panics in DSP code.
+assert_process_allocs = ["dep:nice-assert-no-alloc"]
+# Add adapters to the Buffer object for reading the channel data to and from
+# `std::simd` vectors. Requires a nightly compiler.
+simd = []
+
+[dependencies]
+nice-plug-derive = { path = "../nice-plug-derive", version = "0.1.2" }
+nice-assert-no-alloc = { version = "1.0", features = ["backtrace", "log"], optional = true }
+tracing.workspace = true
+atomic_float.workspace = true
+bitflags.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+atomic_refcell.workspace = true
+raw-window-handle.workspace = true
+thiserror.workspace = true
+crossbeam-utils = "0.8.21"
+midi-consts = "0.1"
+dpi = { version = "0.1.2", optional = true }
+
+[dev-dependencies]
+approx.workspace = true

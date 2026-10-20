@@ -1,0 +1,10 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition.workspace = true
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+description = "A helper for compiling and bundling plugins, can be invoked in this repo using `cargo xtask`"
+license.workspace = true
+
+[dependencies]
+nice-plug-xtask = { path = "../nice-plug-xtask" }

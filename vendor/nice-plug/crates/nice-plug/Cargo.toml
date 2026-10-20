@@ -1,0 +1,142 @@
+[package]
+name = "nice-plug"
+version = "0.4.2"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["audio", "plugin", "clap", "vst", "vst3"]
+categories = ["multimedia::audio"]
+description = "An audio plugin development framework that is nice to use :)"
+readme = "../../README.md"
+
+# Show documentation with all features enabled on docs.rs
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["editor", "vst3", "tracing-subscriber"]
+# Enables editor (GUI) support.
+editor = ["dep:fragile", "nice-plug-core/editor"]
+# Enabling this feature will cause the plugin to terminate when allocations
+# occur in the processing function during debug builds. Keep in mind that panics
+# may also allocate if they use string formatting, so temporarily disabling this
+# feature may be necessary when debugging panics in DSP code.
+assert_process_allocs = ["dep:nice-assert-no-alloc", "nice-plug-core/assert_process_allocs"]
+# Enables an export target for standalone binaries through the
+# `nice_export_standalone()` function. Disabled by default as this requires
+# building additional dependencies for audio and MIDI handling.
+standalone = [
+  "dep:clap",
+  "dep:cpal",
+  "dep:jack",
+  "dep:midir",
+  "dep:rtrb",
+  "dep:fixed-resample",
+  "dep:audioadapter-buffers",
+  "dep:ctrlc"
+]
+# Enables ASIO for the standalone wrapper. This is separate from `standalone` so plugin and
+# non-Windows standalone builds do not need the ASIO SDK toolchain.
+standalone-asio = ["standalone", "cpal/asio"]
+# Enables the `nice_export_vst3!()` macro. Enabled by default.
+vst3 = ["dep:vst3", "dep:widestring"]
+# Add adapters to the Buffer object for reading the channel data to and from
+# `std::simd` vectors. Requires a nightly compiler.
+simd = ["nice-plug-core/simd"]
+# Compress plugin state using the Zstandard algorithm. Loading uncompressed
+# state is still supported so existing state will still load after enabling this
+# feature for a plugin, but it can not be disabled again without losing state
+# compatibility.
+zstd = ["dep:zstd"]
+# Enables using `tracing-subscriber` as a fallback if the user has not set up a
+# logger in Plugin::setup_logger().
+tracing-subscriber = ["dep:tracing-subscriber"]
+# Allows editors to use a workaround to fix broken dpi scaling issues on Windows when running in
+# standalone mode (see: https://github.com/RustAudio/baseview/issues/321)
+#
+# This is generally safe to enable for most plugins. The only case where it *should not*
+# be enabled is if your plugin hosts other plugins.
+#
+# More specifically, do *NOT* enable this if any of the following applies:
+# * Multiple `baseview` versions are present in the final binary
+# * `baseview` is being used in conjunction with other platform windowing libraries (e.g. `winit`, `SDL`, etc.)
+# * The current process may host other plugins that need to interact with the platform's GUI capabilities
+unsafe_standalone_dpi_fix = []
+# Enables setting the "flush to zero" CPU flag to avoid denormal numbers when
+# processing. This can lead to a significant performance increases in some cases.
+#
+# HOWEVER, the Rust compiler technically considers this to be undefined behavior,
+# so USE AT YOUR OWN RISK! Though if any UB did occur, the only damage will
+# likely just be audio glitches, not memory safety issues.
+#
+# Note, performance issues due to denormal numbers only effect x86 targets (ARM,
+# WASM, and RISC-V targets are all unaffected by denormal numbers).
+#
+# For more information on why this is considered undefined behavior, see:
+# https://doc.rust-lang.org/core/arch/x86_64/fn._mm_setcsr.html
+#
+# There is also currently an open issue to fix the "undefined behavior" status:
+# https://github.com/rust-lang/rust/issues/136469
+#
+# For an explanation on why denormal numbers are a problem, see:
+# https://mu.krj.st/denormal/
+unsafe_flush_denormals = []
+
+[dependencies]
+nice-plug-derive = { path = "../nice-plug-derive", version = "0.1.2" }
+nice-plug-core = { path = "../nice-plug-core", version = "0.4.2", default-features = false }
+nice-assert-no-alloc = { version = "1.0", features = ["backtrace", "log"], optional = true }
+nice-log = { path = "../nice-log", version = "0.3.1" }
+clap-sys = "0.5.0"
+# All the claps!
+clap = { version = "4.1.8", features = [
+  "derive",
+  "wrap_help",
+], optional = true }
+parking_lot.workspace = true
+atomic_refcell.workspace = true
+try-lock = "0.2.5"
+crossbeam.workspace = true
+anymap3 = "1.0.1"
+anyhow.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+backtrace = "0.3.76"
+tracing.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
+raw-window-handle.workspace = true
+atomic_float.workspace = true
+zstd = { version = "0.13.3", optional = true }
+cpal = { version = "0.18.2", optional = true }
+jack = { version = "0.13.5", optional = true }
+midir = { version = "0.11.0", optional = true }
+fixed-resample = { version = "0.13.0", default-features = false, features = ["channel"], optional = true }
+audioadapter-buffers = { version = "5.2", optional = true }
+rtrb = { workspace = true, optional = true }
+# Used for the `vst3` feature
+vst3 = { version = "0.3.0", optional = true }
+widestring = { version = "1.2.1", optional = true }
+fragile = { version = "2.1", default-features = false, optional = true }
+ctrlc = { version = "3.5.2", optional = true }
+
+[target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
+libc = "0.2.124"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+core-foundation = "0.10.1"
+
+[target.'cfg(target_os = "windows")'.dependencies.windows]
+workspace = true
+features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Performance",
+]
+
+[dev-dependencies]
+approx.workspace = true

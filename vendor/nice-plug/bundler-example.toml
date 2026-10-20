@@ -1,0 +1,20 @@
+# Example metadata for nice-plug's `cargo xtask bundle <foo>` plugin
+# bundler. This file's syntax is as follows:
+#
+# [package_name]
+# name = "Human Readable Plugin Name"  # defaults to <package_name>
+
+[gain]
+name = "Gain"
+
+[midi_inverter]
+name = "Midi Inverter"
+
+[poly_mod_synth]
+name = "PolyMod Synth"
+
+[sine]
+name = "Sine"
+
+[stft]
+name = "Stft"

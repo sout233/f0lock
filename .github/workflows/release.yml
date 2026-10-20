@@ -43,16 +43,13 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Fetch pinned dependencies and apply patches
-        run: python tools/ci/prepare_dependencies.py
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.targets }}
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.platform }}-${{ hashFiles('tools/ci/dependencies.json', 'docs/patches/nice-plug-ui-dpi.patch') }}
+          key: ${{ matrix.platform }}-${{ hashFiles('vendor/**') }}
           cache-workspace-crates: true
 
       - name: Install Linux build dependencies

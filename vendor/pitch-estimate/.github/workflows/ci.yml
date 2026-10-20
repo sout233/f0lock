@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  stable:
+    name: stable gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo build --locked
+      - run: cargo test --locked
+      - run: cargo test --locked --release
+      # The allocation counter is process-wide, so this test runs alone.
+      - run: cargo test --locked --test zero_alloc -- --test-threads=1
+      - run: cargo test --locked --release --test zero_alloc -- --test-threads=1
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo fmt --check
+      - run: cargo package --locked
+
+  msrv:
+    name: rust 1.70 floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.70.0
+      # The crate declares no dev-dependencies, so the lock file is exact
+      # for both commands and the doctests compile nothing extra.
+      - run: cargo build --lib --locked
+      - run: cargo test --doc --locked

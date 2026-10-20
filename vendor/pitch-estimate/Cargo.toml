@@ -1,0 +1,17 @@
+[package]
+name = "pitch-estimate"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = ["Justin Jones <hey.jones@icloud.com>"]
+license = "MIT"
+description = "Per-frame monophonic pitch detection with the McLeod pitch method (MPM) and YIN, for f32 and f64 samples"
+readme = "README.md"
+keywords = ["pitch", "audio", "dsp", "yin", "mpm"]
+categories = ["multimedia::audio", "algorithms", "science"]
+repository = "https://github.com/hey-jj/pitch-estimate"
+documentation = "https://docs.rs/pitch-estimate"
+exclude = ["/.github", "/tools"]
+
+[dependencies]
+realfft = "3.5"

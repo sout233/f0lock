@@ -1,0 +1,13 @@
+[package]
+name = "cargo-nice-plug"
+version = "0.1.1"
+edition.workspace = true
+authors = ["Robbert van der Helm <mail@robbertvanderhelm.nl>"]
+description = "A cargo subcommand for compiling and bundling audio plugins, analogous to nice-plug's `cargo xtask`"
+license.workspace = true
+repository.workspace = true
+categories = ["multimedia::audio"]
+keywords = ["plugin", "clap", "vst3"]
+
+[dependencies]
+nice-plug-xtask = { path = "../nice-plug-xtask", version = "0.1.1" }

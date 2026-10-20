@@ -1,0 +1,35 @@
+[package]
+name = "nice-plug-egui"
+version = "0.6.0"
+authors = [
+    "Billy Messenger <billydm@noreply.codeberg.org>",
+    "Robbert van der Helm <mail@robbertvanderhelm.nl>",
+]
+description = "An adapter to use egui GUIs with nice-plug"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["gui", "nice-plug", "plugin", "clap", "vst3"]
+categories = ["gui"]
+
+[features]
+dpi-trace = ["egui-baseview/dpi-trace"]
+default = ["opengl"]
+opengl = ["egui-baseview/opengl"]
+wgpu = ["egui-baseview/wgpu"]
+## Enables a temporary workaround for keyboard input not working sometimes.
+## See https://codeberg.org/RustAudio/egui-baseview/issues/20
+keyboard_focus_workaround = ["egui-baseview/keyboard_focus_workaround"]
+
+[dependencies]
+raw-window-handle.workspace = true
+nice-plug-core = { path = "../nice-plug-core", version = "0.4.2" }
+egui = { version = "0.37.0", default-features = false, features = ["bytemuck"] }
+#egui-baseview = { git = "https://codeberg.org/RustAudio/egui-baseview.git", rev = "36444c18967f330effe3b7544da1f1797642b778", default-features = false, features = [
+egui-baseview = { version = "0.9.0", default-features = false, features = [
+    "tracing",
+] }
+crossbeam.workspace = true
+parking_lot.workspace = true
+# To make the state persistable
+serde.workspace = true
