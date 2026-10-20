@@ -153,10 +153,10 @@ def macos_package(stage, output, version):
         subprocess.run(
             [
                 "lipo",
+                str(bundle / "Contents/MacOS/f0lock"),
                 "-verify_arch",
                 "x86_64",
                 "arm64",
-                str(bundle / "Contents/MacOS/f0lock"),
             ],
             check=True,
         )
