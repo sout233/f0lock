@@ -1,0 +1,131 @@
+name: Release plugins
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-2025
+            targets: x86_64-pc-windows-msvc
+          - platform: macos
+            runner: macos-15
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - platform: linux
+            runner: ubuntu-22.04
+            targets: x86_64-unknown-linux-gnu
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Fetch pinned dependencies and apply patches
+        run: python tools/ci/prepare_dependencies.py
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.platform }}-${{ hashFiles('tools/ci/dependencies.json', 'docs/patches/nice-plug-ui-dpi.patch') }}
+          cache-workspace-crates: true
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config build-essential libasound2-dev libgl1-mesa-dev \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-icccm4-dev \
+            libxcb-dri3-dev libxcb-cursor-dev libxkbcommon-x11-dev libxcursor-dev
+
+      - name: Build Windows and Linux bundles
+        if: matrix.platform != 'macos'
+        run: cargo xtask bundle f0lock --release --locked
+
+      - name: Build macOS Universal bundles
+        if: matrix.platform == 'macos'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '14.0'
+        run: cargo xtask bundle-universal f0lock --release --locked
+
+      - name: Package Windows installer and archive
+        if: matrix.platform == 'windows'
+        env:
+          ISCC: 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+        run: python tools/ci/package.py windows --iscc "$ISCC"
+
+      - name: Package macOS installer and archive
+        if: matrix.platform == 'macos'
+        run: python tools/ci/package.py macos
+
+      - name: Package Linux archive
+        if: matrix.platform == 'linux'
+        run: python tools/ci/package.py linux
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: f0lock-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish GitHub Release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: f0lock-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: python
+        run: |
+          import hashlib
+          from pathlib import Path
+
+          directory = Path('dist')
+          lines = []
+          for path in sorted(directory.iterdir()):
+              with path.open('rb') as data:
+                  digest = hashlib.file_digest(data, 'sha256').hexdigest()
+              lines.append(f'{digest}  {path.name}\n')
+          (directory / 'SHA256SUMS').write_text(''.join(lines), encoding='utf-8')
+
+      - name: Create release and upload packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --title "$RELEASE_TAG" --generate-notes
