@@ -1,0 +1,195 @@
+use super::*;
+use crate::dpi::Size;
+use crate::timer::TimerHandle;
+use crate::waker::WindowWaker;
+use crate::{platform, MouseCursor, WindowSize};
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
+};
+use std::fmt::Debug;
+use std::time::Duration;
+
+/// A handle to the window given to a [`WindowHandler`](crate::WindowHandler), which it can then
+/// use to perform various operations on the window itself.
+#[derive(Clone)]
+pub struct WindowContext {
+    inner: platform::WindowContext,
+}
+
+impl WindowContext {
+    pub(crate) fn new(inner: platform::WindowContext) -> Self {
+        Self { inner }
+    }
+
+    /// Sets the [`MouseCursor`] icon to be displayed when the mouse cursor hovers this window.
+    pub fn set_mouse_cursor(&self, mouse_cursor: MouseCursor) -> Result<(), Error> {
+        self.inner.set_mouse_cursor(mouse_cursor)?;
+        Ok(())
+    }
+
+    /// Requests the window to be closed.
+    ///
+    /// This request is not immediate. When exactly it will be closed is platform-dependent.
+    ///
+    /// However, it is guaranteed to only get closed after all [`WindowHandler`](crate::WindowHandler)
+    /// methods are completed, and soon enough to be perceived as instantaneous by the user.
+    pub fn request_close(&self) {
+        self.inner.request_close();
+    }
+
+    pub fn request_redraw(&self) {
+        self.inner.request_redraw()
+    }
+
+    pub fn request_redraw_after(&self, duration: Duration) {
+        self.inner.request_redraw_after(duration)
+    }
+
+    #[must_use]
+    pub fn waker(&self) -> WindowWaker {
+        WindowWaker { inner: self.inner.waker() }
+    }
+
+    /// Returns `true` if this window currently has keyboard focus, `false` otherwise.
+    pub fn has_focus(&self) -> bool {
+        self.inner.has_focus()
+    }
+
+    /// Focuses this window.
+    pub fn focus(&self) -> Result<(), Error> {
+        self.inner.focus()?;
+        Ok(())
+    }
+
+    /// Resizes this window to the given `size`.
+    ///
+    /// The given `size` can either be in [physical](dpi::PhysicalSize) or
+    /// [logical](dpi::LogicalSize) pixels.
+    pub fn resize(&self, size: impl Into<Size>) -> Result<(), Error> {
+        self.inner.resize(size.into())?;
+        Ok(())
+    }
+
+    /// Returns the current scale factor of this window.
+    pub fn scale_factor(&self) -> f64 {
+        self.inner.scale_factor()
+    }
+
+    /// Returns the current size of this window.
+    pub fn size(&self) -> WindowSize {
+        self.inner.size()
+    }
+
+    /// Returns a new lightweight [`PlatformHandle`] to this window.
+    ///
+    /// It can be sent across threads to access the underlying platform window and display connection.
+    /// See the [`PlatformHandle`] documentation for more information.
+    pub fn platform_handle(&self) -> PlatformHandle {
+        PlatformHandle { inner: self.inner.platform_handle() }
+    }
+
+    /// Returns the [`GlContext`](crate::gl::GlContext) associated to this window.
+    ///
+    /// If the window was not created with a GL context, this will return [`None`].
+    #[cfg(feature = "opengl")]
+    pub fn gl_context(&self) -> Option<crate::gl::GlContext> {
+        self.inner.gl_context()
+    }
+
+    /// Creates a new timer that will trigger regularly at the specified `interval`.
+    ///
+    /// When the timer is triggered, the [`WindowHandler::on_timer`] callback will be called with a
+    /// handle to the timer that was triggered.
+    ///
+    /// This returns a [`TimerHandle`], which can be stored and later matched against the one given in
+    /// [`WindowHandler::on_timer`] to identify which timer was triggered, and process it accordingly.
+    ///
+    /// The returned [`TimerHandle`] is a weak handle and has no effect on the underlying timer's
+    /// lifetime. See the [`TimerHandle`] documentation for more information.
+    ///
+    /// The created timer is automatically stopped and cleaned up when the window is destroyed.
+    ///
+    /// # Timer precision
+    ///
+    /// The timers created by this function rely on the platform's GUI timers implementation, which
+    /// are often imprecise.
+    ///
+    /// They often have a minimum firing interval that can be as high as 10ms (e.g. on Windows).
+    /// They can also drift, so two timers with the same interval may not trigger in sync forever.
+    ///
+    /// Moreover, all platforms have something akin to some kind of "event queue", which can back
+    /// up if the thread is overloaded.
+    /// When that happens, depending on the platform, timer firings may be skipped, coalesced, or
+    /// even have multiple firings come all flooding at once when said queue is emptying.
+    ///
+    /// Therefore, this function should *not* be used if you need high-precision timers, e.g. for
+    /// hardware synchronization, MIDI, etc.
+    #[inline]
+    pub fn create_timer(&self, interval: Duration) -> Result<TimerHandle, Error> {
+        Ok(self.inner.create_timer(interval)?.into())
+    }
+}
+
+impl HasWindowHandle for WindowContext {
+    fn window_handle(&self) -> core::result::Result<WindowHandle<'_>, HandleError> {
+        self.inner.window_handle().ok_or(HandleError::Unavailable)
+    }
+}
+
+impl HasDisplayHandle for WindowContext {
+    fn display_handle(&self) -> core::result::Result<DisplayHandle<'_>, HandleError> {
+        Ok(self.inner.display_handle())
+    }
+}
+
+/// A lightweight handle to a window and its display connection.
+///
+/// This type implements both [`HasWindowHandle`] and [`HasDisplayHandle`], allowing users to access
+/// the underlying platform window and display connection.
+///
+/// This type is cheaply [cloneable](Clone). All cloned handles will always refer to the same window and
+/// display connection.
+///
+/// Unlike the [`WindowContext`] and [`WindowHandle`] types however, this handle can be safely sent,
+/// used, and dropped across threads (it implements [`Send`] and [`Sync`]).
+///
+/// However, it is not guaranteed that this handle can be successfully used from other threads,
+/// depending on the platform.
+///
+/// Similarly, this handle is actually a weak handle: while it remains safe to use, its methods
+/// will always return [`HandleError::Unavailable`] if called after the window it refers to has been
+/// destroyed.
+///
+/// # Platform compatibility notes
+///
+/// Depending on the platform, the [`PlatformHandle::window_handle`] method may return
+/// [`HandleError::Unavailable`] if called from a thread other than the main thread (Even if the
+/// window is still alive and well).
+#[derive(Clone)]
+pub struct PlatformHandle {
+    inner: platform::PlatformHandle,
+}
+
+// Assert that PlatformHandle implements both Send & Sync on all platforms
+const _: () = {
+    const fn assert_impl_all<T: Debug + Send + Sync>() {}
+    let _: fn() = assert_impl_all::<PlatformHandle>;
+};
+
+impl HasWindowHandle for PlatformHandle {
+    fn window_handle(&self) -> core::result::Result<WindowHandle<'_>, HandleError> {
+        self.inner.window_handle().ok_or(HandleError::Unavailable)
+    }
+}
+
+impl HasDisplayHandle for PlatformHandle {
+    fn display_handle(&self) -> core::result::Result<DisplayHandle<'_>, HandleError> {
+        Ok(self.inner.display_handle())
+    }
+}
+
+impl Debug for PlatformHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}

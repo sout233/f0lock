@@ -1,0 +1,7 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nice-plug-xtask = { path = "../../f0lock_vendor/nice-plug/crates/nice-plug-xtask" }

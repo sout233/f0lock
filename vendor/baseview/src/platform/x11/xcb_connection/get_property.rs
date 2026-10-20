@@ -1,0 +1,199 @@
+/*
+The code in this file was derived from the Winit project (https://github.com/rust-windowing/winit).
+The original, unmodified code file this work is derived from can be found here:
+
+https://github.com/rust-windowing/winit/blob/44aabdddcc9f720aec860c1f83c1041082c28560/src/platform_impl/linux/x11/util/window_property.rs
+
+The original code this is based on is licensed under the following terms:
+*/
+
+/*
+Copyright 2024 "The Winit contributors".
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
+The full licensing terms of the original source code, at the time of writing, can also be found at:
+https://github.com/rust-windowing/winit/blob/44aabdddcc9f720aec860c1f83c1041082c28560/LICENSE .
+
+The Derived Work present in this file contains modifications made to the original source code, is
+Copyright (c) 2024 "The Baseview contributors",
+and is licensed under either the Apache License, Version 2.0; or The MIT license, at your option.
+
+Copies of those licenses can be respectively found at:
+* https://github.com/RustAudio/baseview/blob/master/LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0 ;
+* https://github.com/RustAudio/baseview/blob/master/LICENSE-MIT.
+
+*/
+
+use bytemuck::Pod;
+use std::error::Error;
+use std::ffi::c_int;
+use std::fmt;
+use std::mem;
+use x11rb::errors::{ConnectionError, ReplyError};
+use x11rb::protocol::xproto::{self, ConnectionExt};
+use x11rb::xcb_ffi::XCBConnection;
+
+#[derive(Debug)]
+pub enum GetPropertyError {
+    ConnectionError(ConnectionError),
+    ReplyError(ReplyError),
+    TypeMismatch(xproto::Atom),
+    FormatMismatch(c_int),
+    Overflow,
+}
+
+impl fmt::Display for GetPropertyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GetPropertyError::TypeMismatch(err) => write!(f, "type mismatch: {err}"),
+            GetPropertyError::FormatMismatch(err) => write!(f, "format mismatch: {err}"),
+            GetPropertyError::ConnectionError(e) => e.fmt(f),
+            GetPropertyError::ReplyError(e) => e.fmt(f),
+            GetPropertyError::Overflow => {
+                f.write_str("Overflow while trying to read property value")
+            }
+        }
+    }
+}
+
+impl From<ConnectionError> for GetPropertyError {
+    fn from(e: ConnectionError) -> Self {
+        GetPropertyError::ConnectionError(e)
+    }
+}
+
+impl From<ReplyError> for GetPropertyError {
+    fn from(e: ReplyError) -> Self {
+        GetPropertyError::ReplyError(e)
+    }
+}
+
+impl Error for GetPropertyError {}
+
+// Number of 32-bit chunks to retrieve per iteration of get_property's inner loop.
+// To test if `get_property` works correctly, set this to 1.
+const PROPERTY_BUFFER_SIZE: u32 = 1024; // 4k of RAM ought to be enough for anyone!
+
+pub(crate) fn get_property<T: Pod>(
+    window: xproto::Window, property: xproto::Atom, property_type: xproto::Atom,
+    conn: &XCBConnection,
+) -> Result<Vec<T>, GetPropertyError> {
+    let mut iter = PropIterator::new(conn, window, property, property_type);
+    let mut data = vec![];
+
+    loop {
+        if !iter.next_window(&mut data)? {
+            break;
+        }
+    }
+
+    Ok(data)
+}
+
+/// An iterator over the "windows" of the property that we are fetching.
+struct PropIterator<'a, T> {
+    /// Handle to the connection.
+    conn: &'a XCBConnection,
+
+    /// The window that we're fetching the property from.
+    window: xproto::Window,
+
+    /// The property that we're fetching.
+    property: xproto::Atom,
+
+    /// The type of the property that we're fetching.
+    property_type: xproto::Atom,
+
+    /// The offset of the next window, in 32-bit chunks.
+    offset: u32,
+
+    /// The format of the type.
+    format: u8,
+
+    /// Keep a reference to `T`.
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<'a, T: Pod> PropIterator<'a, T> {
+    /// Create a new property iterator.
+    fn new(
+        conn: &'a XCBConnection, window: xproto::Window, property: xproto::Atom,
+        property_type: xproto::Atom,
+    ) -> Self {
+        let format = match mem::size_of::<T>() {
+            1 => 8,
+            2 => 16,
+            4 => 32,
+            _ => unreachable!(),
+        };
+
+        Self {
+            conn,
+            window,
+            property,
+            property_type,
+            offset: 0,
+            format,
+            _phantom: Default::default(),
+        }
+    }
+
+    /// Get the next window and append it to `data`.
+    ///
+    /// Returns whether there are more windows to fetch.
+    fn next_window(&mut self, data: &mut Vec<T>) -> Result<bool, GetPropertyError> {
+        // Send the request and wait for the reply.
+        let reply = self
+            .conn
+            .get_property(
+                false,
+                self.window,
+                self.property,
+                self.property_type,
+                self.offset,
+                PROPERTY_BUFFER_SIZE,
+            )?
+            .reply()?;
+
+        // Make sure that the reply is of the correct type.
+        if reply.type_ != self.property_type {
+            return Err(GetPropertyError::TypeMismatch(reply.type_));
+        }
+
+        // Make sure that the reply is of the correct format.
+        if reply.format != self.format {
+            return Err(GetPropertyError::FormatMismatch(reply.format.into()));
+        }
+
+        // Append the data to the output.
+        if size_of::<T>() == 1 && align_of::<T>() == 1 {
+            // We can just do a bytewise append.
+            data.extend_from_slice(bytemuck::cast_slice(&reply.value));
+        } else {
+            // Reply may not be properly aligned, but we can afford to use an intermediary vec here
+            let mut reply = bytemuck::allocation::pod_collect_to_vec(&reply.value);
+            data.append(&mut reply);
+        }
+
+        // Check `bytes_after` to see if there are more windows to fetch.
+        let Some(new_offset) = self.offset.checked_add(PROPERTY_BUFFER_SIZE) else {
+            return Err(GetPropertyError::Overflow);
+        };
+        self.offset = new_offset;
+
+        Ok(reply.bytes_after != 0)
+    }
+}

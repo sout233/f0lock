@@ -1,0 +1,216 @@
+use super::xlib::*;
+use crate::gl::{GlConfig, Profile};
+use crate::platform::gl::CreationFailedError;
+use crate::platform::*;
+
+use std::ffi::{c_ulong, c_void, CStr};
+use std::os::raw::c_int;
+use std::ptr::NonNull;
+use std::rc::Rc;
+use x11_dl::glx::{arb::*, *};
+use x11_dl::xlib;
+use x11_dl::xlib::XVisualInfo;
+
+/// See https://www.khronos.org/registry/OpenGL/extensions/ARB/GLX_ARB_create_context.txt.
+type GlXCreateContextAttribsARB = unsafe extern "C" fn(
+    dpy: *mut xlib::Display,
+    fbc: GLXFBConfig,
+    share_context: GLXContext,
+    direct: xlib::Bool,
+    attribs: *const c_int,
+) -> GLXContext;
+
+/// See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_framebuffer_sRGB.txt.
+const GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB: i32 = 0x20B2;
+
+#[derive(Clone)]
+pub struct Glx {
+    inner: Rc<x11_dl::glx::Glx>,
+}
+
+impl Glx {
+    pub fn open() -> Result<Self> {
+        Ok(Self { inner: Rc::new(x11_dl::glx::Glx::open()?) })
+    }
+
+    fn get_fb_attribs(config: &GlConfig) -> [c_int; 29] {
+        #[rustfmt::skip]
+        let fb_attribs = [
+            GLX_X_RENDERABLE, 1,
+            GLX_X_VISUAL_TYPE, GLX_TRUE_COLOR,
+            GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
+            GLX_RENDER_TYPE, GLX_RGBA_BIT,
+            GLX_RED_SIZE, config.red_bits as i32,
+            GLX_GREEN_SIZE, config.green_bits as i32,
+            GLX_BLUE_SIZE, config.blue_bits as i32,
+            GLX_ALPHA_SIZE, config.alpha_bits as i32,
+            GLX_DEPTH_SIZE, config.depth_bits as i32,
+            GLX_STENCIL_SIZE, config.stencil_bits as i32,
+            GLX_DOUBLEBUFFER, 1,
+            GLX_SAMPLE_BUFFERS, config.samples.is_some() as i32,
+            GLX_SAMPLES, config.samples.unwrap_or(0) as i32,
+            GLX_FRAMEBUFFER_SRGB_CAPABLE_ARB, config.srgb as i32,
+            0,
+        ];
+
+        fb_attribs
+    }
+
+    pub fn choose_best_fb_config(
+        &self, connection: &XlibConnection, config: &GlConfig, error_handler: &XErrorHandler,
+    ) -> Result<GlxFbConfig> {
+        let fb_attribs = Self::get_fb_attribs(config);
+
+        let mut nelements = 0;
+        // SAFETY: XlibConnection guarantees the inner dpy is valid.
+        // The fb_attribs and nelements pointers come from references and are therefore valid.
+        let result = unsafe {
+            (self.inner.glXChooseFBConfig)(
+                connection.as_raw(),
+                connection.default_screen_index().into(),
+                fb_attribs.as_ptr(),
+                &mut nelements,
+            )
+        };
+
+        error_handler.check()?;
+        if nelements == 0 || result.is_null() {
+            return Err(CreationFailedError::NoValidFBConfig.into());
+        }
+
+        // SAFETY: If nelements != 0, the result pointer is non-null, and no Xlib error occured, then
+        // there must be at least one element in that array, which is valid for reads.
+        let first_result = unsafe { result.read() };
+
+        // SAFETY: for the same reasons above, glXChooseFBConfig returned a valid array
+        // that we must free ourselves.
+        unsafe { (connection.xlib().XFree)(result.cast()) };
+
+        Ok(GlxFbConfig(first_result))
+    }
+
+    pub fn get_visual_from_fb_config(
+        &self, connection: &XlibConnection, fb_config: GlxFbConfig, error_handler: &XErrorHandler,
+    ) -> Result<XVisualInfo> {
+        // SAFETY: XlibConnection guarantees the inner dpy is valid.
+        let result =
+            unsafe { (self.inner.glXGetVisualFromFBConfig)(connection.as_raw(), fb_config.0) };
+
+        error_handler.check()?;
+        if result.is_null() {
+            return Err(CreationFailedError::NoVisual.into());
+        }
+
+        // SAFETY: If the result pointer is non-null, and no Xlib error occured, then
+        // glXGetVisualFromFBConfig must have returned a valid result.
+        let visual = unsafe { result.read() };
+        // SAFETY: for the same reasons above, glXGetVisualFromFBConfig returned a valid array
+        // that we must free ourselves.
+        unsafe { (connection.xlib().XFree)(result.cast()) };
+
+        Ok(visual)
+    }
+
+    pub fn swap_buffers(
+        &self, connection: &XlibConnection, window_id: c_ulong, error_handler: &XErrorHandler,
+    ) -> Result<()> {
+        // SAFETY: XlibConnection guarantees the inner dpy is valid.
+        unsafe { (self.inner.glXSwapBuffers)(connection.as_raw(), window_id) };
+
+        Ok(error_handler.check()?)
+    }
+
+    pub fn get_proc_address(&self, proc_name: &CStr) -> Option<NonNull<c_void>> {
+        let result = unsafe { (self.inner.glXGetProcAddress)(proc_name.as_ptr().cast())? };
+
+        NonNull::new(result as *mut c_void)
+    }
+
+    pub fn get_glx_create_context_attribs_arb(&self) -> Option<GlxCreateContextAttribsARB> {
+        let ptr = self.get_proc_address(c"glXCreateContextAttribsARB")?;
+
+        // SAFETY: NonNull is repr(transparent), GlxCreateContextAttribsARB is the correct type for this function pointer
+        Some(GlxCreateContextAttribsARB(unsafe {
+            core::mem::transmute::<NonNull<c_void>, GlXCreateContextAttribsARB>(ptr)
+        }))
+    }
+
+    pub unsafe fn destroy_context(&self, connection: &XlibConnection, context: GLXContext) {
+        // SAFETY: XlibConnection guarantees the inner dpy is valid.
+        unsafe { (self.inner.glXDestroyContext)(connection.as_raw(), context) };
+    }
+
+    pub unsafe fn make_current(
+        &self, connection: &XlibConnection, window_id: c_ulong, context: GLXContext,
+        error_handler: &XErrorHandler,
+    ) -> Result<()> {
+        // SAFETY: XlibConnection guarantees the inner dpy is valid.
+        let res = unsafe { (self.inner.glXMakeCurrent)(connection.as_raw(), window_id, context) };
+
+        error_handler.check()?;
+        if res == 0 {
+            return Err(CreationFailedError::MakeCurrentFailed.into());
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn clear_current(
+        &self, connection: &XlibConnection, error_handler: &XErrorHandler,
+    ) -> Result<()> {
+        self.make_current(connection, 0, core::ptr::null_mut(), error_handler)
+    }
+}
+
+pub struct GlxCreateContextAttribsARB(GlXCreateContextAttribsARB);
+
+impl GlxCreateContextAttribsARB {
+    fn get_ctx_attribs(config: &GlConfig) -> [c_int; 7] {
+        let profile_mask = match config.profile {
+            Profile::Core => GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
+            Profile::Compatibility => GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+        };
+
+        #[rustfmt::skip]
+        let ctx_attribs = [
+            GLX_CONTEXT_MAJOR_VERSION_ARB, config.version.0 as i32,
+            GLX_CONTEXT_MINOR_VERSION_ARB, config.version.1 as i32,
+            GLX_CONTEXT_PROFILE_MASK_ARB, profile_mask,
+            0,
+        ];
+
+        ctx_attribs
+    }
+
+    pub fn call(
+        &self, connection: &XlibConnection, gl_config: &GlConfig, glx_fb_config: GlxFbConfig,
+        error_handler: &XErrorHandler,
+    ) -> Result<GLXContext> {
+        let ctx_attribs = Self::get_ctx_attribs(gl_config);
+
+        let context = unsafe {
+            self.0(
+                connection.as_raw(),
+                glx_fb_config.0,
+                std::ptr::null_mut(),
+                1,
+                ctx_attribs.as_ptr(),
+            )
+        };
+
+        error_handler.check()?;
+
+        if context.is_null() {
+            return Err(CreationFailedError::ContextCreationFailed.into());
+        }
+
+        Ok(context)
+    }
+}
+
+/// Handle to a GLX Framebuffer configuration object.
+///
+/// These point to objects in a global table managed by glXChooseFBConfig, and are never destroyed.
+/// Therefore, these have the 'static lifetime, and are always safe to use.
+#[derive(Copy, Clone)]
+pub struct GlxFbConfig(GLXFBConfig);

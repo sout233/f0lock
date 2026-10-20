@@ -1,0 +1,235 @@
+use crate::dpi::{LogicalSize, Size};
+use objc2::rc::{autoreleasepool, Retained, Weak};
+use objc2::MainThreadMarker;
+use objc2_app_kit::{
+    NSApplication, NSApplicationActivationPolicy, NSPasteboard, NSPasteboardTypeString, NSView,
+    NSWindow,
+};
+use objc2_foundation::{NSSize, NSString};
+use std::cell::Cell;
+use std::rc::Rc;
+
+use crate::platform::macos::view::{BaseviewView, ViewParentingType};
+use crate::platform::Result;
+use crate::platform::{ParentWindowHandle, WindowWaker};
+use crate::utils::SizingStrategy;
+use crate::wrappers::appkit::{create_window, View};
+use crate::*;
+
+pub struct WindowHandle {
+    mtm: MainThreadMarker,
+    view: Weak<View<BaseviewView>>,
+    _window: Option<Retained<NSWindow>>,
+    state: Rc<WindowSharedState>,
+}
+
+impl Drop for WindowHandle {
+    fn drop(&mut self) {
+        let Some(view) = self.view.load() else { return };
+        let Some(view) = view.inner_ref() else { return };
+
+        BaseviewView::close(view, true);
+    }
+}
+
+impl WindowHandle {
+    pub fn create_window(mut init: WindowInitializer) -> Result<Self> {
+        autoreleasepool(|_| {
+            let Some(mtm) = MainThreadMarker::new() else {
+                panic!("macOS: Windows can only be created on the main thread!")
+            };
+
+            // Creates the global NSApplication instance, if it doesn't exist yet
+            let _ = NSApplication::sharedApplication(mtm);
+
+            if let Some(parent) = init.settings.parent.take() {
+                return Self::create_window_parented(init, parent.inner.view.into_inner(mtm), mtm);
+            }
+
+            Self::create_window_standalone(init, mtm)
+        })
+    }
+
+    fn create_window_parented(
+        init: WindowInitializer, parent_view: Retained<NSView>, mtm: MainThreadMarker,
+    ) -> Result<Self> {
+        let parenting =
+            ViewParentingType::Parented { parent_view: Weak::from_retained(&parent_view) };
+
+        let backing_scale_factor =
+            parent_view.window().map(|w| w.backingScaleFactor()).unwrap_or(1.0);
+        let final_size = init.settings.size.to_logical(backing_scale_factor);
+
+        let (ns_view, state) = BaseviewView::new(init, parenting, final_size, mtm)?;
+
+        Ok(Self { mtm, state, _window: None, view: Weak::from_retained(&ns_view) })
+    }
+
+    pub fn create_window_standalone(
+        init: WindowInitializer, mtm: MainThreadMarker,
+    ) -> Result<Self> {
+        let window = create_window_with_options(&init.settings, mtm);
+        window.setAcceptsMouseMovedEvents(true);
+
+        let final_size = window.contentRectForFrameRect(window.frame()).size;
+        let final_size = LogicalSize::new(final_size.width, final_size.height);
+
+        let parenting = ViewParentingType::Windowed { owned_window: Weak::from_retained(&window) };
+
+        let (view, state) = BaseviewView::new(init, parenting, final_size, mtm)?;
+
+        Ok(Self { mtm, state, view: Weak::from_retained(&view), _window: Some(window) })
+    }
+
+    pub fn run_until_closed(self) -> Result<()> {
+        let Some(view) = self.view.load() else { return Ok(()) };
+        let Some(view) = view.inner_ref() else { return Ok(()) };
+
+        autoreleasepool(|_| {
+            BaseviewView::show(view);
+
+            let app = NSApplication::sharedApplication(self.mtm);
+            app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+
+            view.lifetime_tied_to_app.set(Some(Weak::from_retained(&app)));
+            app.run();
+            view.lifetime_tied_to_app.set(None);
+        });
+
+        Ok(())
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.state.closed.get()
+    }
+
+    pub fn is_resizable(&self) -> bool {
+        self.state.sizing_strategy.is_resizable()
+    }
+
+    pub fn min_size(&self) -> Option<Size> {
+        self.state.sizing_strategy.min_size()
+    }
+
+    pub fn max_size(&self) -> Option<Size> {
+        self.state.sizing_strategy.max_size()
+    }
+
+    #[inline]
+    pub fn handle_main_thread_callback(&self) {
+        // No-op
+    }
+
+    pub fn size(&self) -> WindowSize {
+        WindowSize::from_logical(self.state.size.get(), self.state.scale_factor.get())
+    }
+
+    pub fn resize(&self, size: Size) -> Result<()> {
+        let Some(view) = self.view.load() else { return Ok(()) };
+        let Some(view) = view.inner_ref() else { return Ok(()) };
+
+        autoreleasepool(|_| {
+            BaseviewView::resize(view, size.to_logical(self.state.scale_factor.get()), false, false)
+        });
+
+        Ok(())
+    }
+
+    pub fn suggest_scale_factor(&self, _scale_factor: f64) -> Result<()> {
+        // This does not do anything on macOS: all coordinates are already logical
+        Ok(())
+    }
+
+    pub fn set_parent(&self, new_parent: ParentWindowHandle) -> Result<()> {
+        let Some(view) = self.view.load() else { return Ok(()) };
+        let Some(view) = view.inner_ref() else { return Ok(()) };
+
+        autoreleasepool(|_| {
+            BaseviewView::set_parent(view, new_parent.view.into_inner(view.mtm));
+        });
+
+        Ok(())
+    }
+
+    pub fn show(&self) -> Result<()> {
+        let Some(view) = self.view.load() else { return Ok(()) };
+        let Some(view) = view.inner_ref() else { return Ok(()) };
+
+        autoreleasepool(|_| {
+            BaseviewView::show(view);
+        });
+        Ok(())
+    }
+
+    pub fn hide(&self) -> Result<()> {
+        let Some(view) = self.view.load() else { return Ok(()) };
+        let Some(view) = view.inner_ref() else { return Ok(()) };
+
+        autoreleasepool(|_| {
+            BaseviewView::hide(view);
+        });
+        Ok(())
+    }
+
+    pub fn sizing_strategy(&self) -> SizingStrategy {
+        self.state.sizing_strategy
+    }
+
+    pub fn request_poll(&self) -> Result<()> {
+        let Some(view) = self.view.load() else { return Ok(()) };
+        let Some(view) = view.inner_ref() else { return Ok(()) };
+
+        BaseviewView::poll(view);
+        Ok(())
+    }
+
+    pub fn waker(&self) -> WindowWaker {
+        WindowWaker::new(Weak::clone(&self.view))
+    }
+}
+
+fn create_window_with_options(
+    settings: &WindowSettings, mtm: MainThreadMarker,
+) -> Retained<NSWindow> {
+    let initial_size = settings.size.to_logical(1.0);
+    let window = create_window(initial_size, settings, mtm);
+    window.center();
+
+    let final_size = settings.size.to_logical(window.backingScaleFactor());
+    if final_size != initial_size {
+        window.setContentSize(NSSize::new(final_size.width, final_size.height));
+    }
+
+    let title = NSString::from_str(&settings.title);
+    window.setTitle(&title);
+
+    window
+}
+
+pub(crate) struct WindowSharedState {
+    pub closed: Cell<bool>,
+    pub size: Cell<LogicalSize<f64>>,
+    pub scale_factor: Cell<f64>,
+    pub sizing_strategy: SizingStrategy,
+    pub redraw_requested: Cell<bool>,
+}
+
+impl WindowSharedState {
+    pub fn new(size: LogicalSize<f64>, scale_factor: f64, sizing_strategy: SizingStrategy) -> Self {
+        Self {
+            closed: false.into(),
+            size: size.into(),
+            scale_factor: scale_factor.into(),
+            sizing_strategy,
+            redraw_requested: Cell::new(false),
+        }
+    }
+}
+
+pub fn copy_to_clipboard(string: &str) {
+    let pb = NSPasteboard::generalPasteboard();
+    let ns_str = NSString::from_str(string);
+
+    pb.clearContents();
+    pb.setString_forType(&ns_str, unsafe { NSPasteboardTypeString });
+}

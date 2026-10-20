@@ -1,0 +1,5 @@
+/target
+/dist
+__pycache__/
+*.py[cod]
+/docs/idk/

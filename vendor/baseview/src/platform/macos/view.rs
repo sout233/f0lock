@@ -1,0 +1,878 @@
+#![expect(deprecated, reason = "Allow use of NSFilenamesPboardType for now")]
+
+use super::keyboard::{make_modifiers, KeyboardState};
+use super::window::WindowSharedState;
+use crate::dpi::{LogicalPosition, LogicalSize};
+use crate::host::Host;
+use crate::platform::macos::cursor::CursorManager;
+use crate::platform::macos::timer::TimerManager;
+use crate::platform::*;
+use crate::tracing::warn;
+use crate::utils::SizingStrategy;
+use crate::window::WindowInitializer;
+use crate::wrappers::appkit::*;
+use crate::MouseEvent::{ButtonPressed, ButtonReleased};
+use crate::{
+    DamageArea, DropData, DropEffect, Event, EventStatus, HandlerError, MouseButton, MouseEvent,
+    ScrollDelta, WindowEvent, WindowHandler, WindowSize,
+};
+use objc2::__framework_prelude::Retained;
+use objc2::rc::Weak;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
+use objc2::{msg_send, AllocAnyThread, ClassType, MainThreadMarker};
+use objc2_app_kit::{
+    NSApplication, NSDragOperation, NSDraggingInfo, NSEvent, NSFilenamesPboardType, NSTrackingArea,
+    NSTrackingAreaOptions, NSView, NSWindow,
+};
+use objc2_foundation::{NSArray, NSNotification, NSPoint, NSPointInRect, NSRect, NSSize, NSString};
+use objc2_quartz_core::CADisplayLink;
+use std::cell::{Cell, OnceCell, RefCell};
+use std::ptr::null;
+use std::rc::Rc;
+use std::time::Duration;
+
+pub enum ViewParentingType {
+    Parented { parent_view: Weak<NSView> },
+    Windowed { owned_window: Weak<NSWindow> },
+    Uninitialized,
+}
+
+impl ViewParentingType {
+    fn setup(&self, child: &View<BaseviewView>) {
+        match self {
+            ViewParentingType::Parented { parent_view } => {
+                if let Some(parent_view) = parent_view.load() {
+                    parent_view.addSubview(child);
+                }
+            }
+            ViewParentingType::Windowed { owned_window, .. } => {
+                if let Some(owned_window) = owned_window.load() {
+                    owned_window.setContentView(Some(child));
+                    set_delegate(&owned_window, child);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn teardown(self) {
+        if let ViewParentingType::Windowed { owned_window: parent_window } = self {
+            if let Some(parent_window) = parent_window.load() {
+                parent_window.close();
+            }
+        }
+    }
+}
+
+pub(crate) struct BaseviewView {
+    pub(crate) state: Rc<WindowSharedState>,
+    pub(crate) mtm: MainThreadMarker,
+    window_handler: WindowHandlerContainer,
+
+    notification_center_observer: Cell<Option<NotificationCenterObserver>>,
+
+    keyboard_state: KeyboardState,
+
+    parenting: RefCell<ViewParentingType>,
+    pub(crate) lifetime_tied_to_app: Cell<Option<Weak<NSApplication>>>,
+    display_link: OnceCell<Retained<CADisplayLink>>,
+    display_link_started: Cell<bool>,
+
+    host: Host,
+    pub(crate) cursor_manager: CursorManager,
+
+    timers: TimerManager,
+
+    #[cfg(feature = "opengl")]
+    pub(crate) gl_context: OnceCell<super::gl::GlContext>,
+}
+
+impl BaseviewView {
+    pub fn new(
+        init: WindowInitializer, parenting: ViewParentingType, final_size: LogicalSize<f64>,
+        mtm: MainThreadMarker,
+    ) -> Result<(Retained<View<Self>>, Rc<WindowSharedState>)> {
+        let view_rect =
+            NSRect::new(NSPoint::ZERO, NSSize::new(final_size.width, final_size.height));
+
+        let state = Rc::new(WindowSharedState::new(
+            final_size,
+            1.0,
+            SizingStrategy::from_settings(&init.settings),
+        ));
+
+        let inner = BaseviewView {
+            mtm,
+            state: Rc::clone(&state),
+
+            keyboard_state: KeyboardState::new(),
+            display_link: OnceCell::new(),
+            display_link_started: false.into(),
+            window_handler: WindowHandlerContainer::new(),
+            notification_center_observer: None.into(),
+            parenting: ViewParentingType::Uninitialized.into(),
+            host: init.host,
+            lifetime_tied_to_app: None.into(),
+            cursor_manager: CursorManager::new(),
+
+            timers: TimerManager::new(),
+
+            #[cfg(feature = "opengl")]
+            gl_context: OnceCell::new(),
+        };
+
+        let view = View::new(view_rect, inner, |view| {
+            // Set up parenting before handler setup
+            parenting.setup(view.view);
+            view.parenting.replace(parenting);
+
+            view.state.scale_factor.set(view.view.backing_scale_factor());
+            view.state.size.set(view.view.size());
+
+            Self::apply_size_constraints(view);
+
+            #[cfg(feature = "opengl")]
+            if let Some(gl_config) = init.settings.gl_config {
+                let gl_context = super::gl::GlContext::create(view.view, gl_config, view.mtm)?;
+                let Ok(()) = view.gl_context.set(gl_context) else { unreachable!() };
+            }
+
+            let context = WindowContext::new(view);
+            let handler = init.builder.build(crate::WindowContext::new(context))?;
+
+            // Initialize handler
+            view.window_handler.set(handler);
+
+            // Set up anything that might trigger events to the handler
+
+            // SAFETY: This static is a read-only constant
+            let ns_filenames_pboard_type = unsafe { NSFilenamesPboardType };
+            view.view.registerForDraggedTypes(&NSArray::from_slice(&[ns_filenames_pboard_type]));
+
+            let display_link = view.view.setup_display_link();
+            display_link.setPaused(true);
+            let Ok(()) = view.display_link.set(display_link) else { unreachable!() };
+
+            let notifier_view = Weak::new(view.view);
+            let observer = NotificationCenterObserver::register_window_key_change(move |n| {
+                if let Some(view) = notifier_view.load() {
+                    if let Some(view) = view.inner_ref() {
+                        BaseviewView::handle_notification(view, n);
+                    }
+                }
+            });
+            view.notification_center_observer.set(Some(observer));
+
+            Ok(())
+        })?;
+
+        Ok((view, state))
+    }
+
+    pub fn show(this: ViewRef<Self>) {
+        let Ok(parent) = this.parenting.try_borrow() else { return };
+
+        if let ViewParentingType::Windowed { owned_window } = &*parent {
+            if let Some(window) = owned_window.load() {
+                window.makeKeyAndOrderFront(None)
+            }
+        }
+    }
+
+    pub fn hide(this: ViewRef<Self>) {
+        let Ok(parent) = this.parenting.try_borrow() else { return };
+
+        if let ViewParentingType::Windowed { owned_window } = &*parent {
+            if let Some(window) = owned_window.load() {
+                window.orderOut(None)
+            }
+        }
+    }
+
+    pub fn poll(this: ViewRef<Self>) {
+        this.window_handler.use_handler(|h| h.poll());
+    }
+
+    pub fn set_next_frame_needed(&self, needed: bool) {
+        if self.display_link_started.get() == needed {
+            return;
+        };
+
+        let Some(display_link) = self.display_link.get() else { return };
+
+        display_link.setPaused(!needed);
+        self.display_link_started.set(needed);
+    }
+
+    pub fn close(this: ViewRef<Self>, from_host: bool) {
+        this.state.closed.set(true);
+        this.view.removeFromSuperview();
+        this.notification_center_observer.take();
+        this.window_handler.destroy();
+
+        if let Some(link) = this.display_link.get() {
+            link.setPaused(true);
+            link.invalidate();
+        }
+
+        let parenting = this.parenting.replace(ViewParentingType::Uninitialized);
+        parenting.teardown();
+
+        if let Some(app) = this.lifetime_tied_to_app.take() {
+            if let Some(app) = app.load() {
+                app.stop(Some(&app));
+            }
+        }
+
+        if !from_host {
+            this.host.notify_destroyed();
+        }
+    }
+
+    pub fn set_parent(this: ViewRef<Self>, new_parent: Retained<NSView>) {
+        let previous_parenting = this.parenting.replace(ViewParentingType::Uninitialized);
+        previous_parenting.teardown();
+
+        let parenting = ViewParentingType::Parented { parent_view: Weak::from(new_parent) };
+        parenting.setup(this.view);
+
+        this.parenting.replace(parenting);
+    }
+
+    pub fn resize(
+        this: ViewRef<Self>, size: LogicalSize<f64>, notify_host: bool, from_window: bool,
+    ) {
+        if size == this.inner.state.size.get() {
+            return;
+        }
+
+        // NOTE: macOS gives you a personal rave if you pass in fractional pixels here. Even
+        // though the size is in fractional pixels.
+        let size = NSSize::new(size.width.round(), size.height.round());
+
+        this.view.setFrameSize(size);
+        this.view.setNeedsDisplay(true);
+
+        // When using OpenGL the `NSOpenGLView` needs to be resized separately? Why? Because
+        // macOS.
+        #[cfg(feature = "opengl")]
+        if let Some(gl_context) = this.gl_context.get() {
+            gl_context.resize(size);
+        }
+
+        if !from_window {
+            // If this is a standalone window then we'll also need to resize the window itself
+            if let ViewParentingType::Windowed { owned_window } = &*this.parenting.borrow() {
+                if let Some(owned_window) = owned_window.load() {
+                    owned_window.setContentSize(size);
+                }
+            }
+        }
+
+        Self::view_did_change_backing_properties(this, notify_host);
+    }
+
+    /// Trigger the event immediately and return the event status.
+    fn trigger_event(this: ViewRef<Self>, event: Event) -> EventStatus {
+        this.window_handler.use_handler(|h| h.on_event(event)).unwrap_or(EventStatus::Ignored)
+    }
+
+    fn trigger_frame(this: ViewRef<Self>) {
+        let result = this.window_handler.use_handler(|h| {
+            this.state.redraw_requested.set(false);
+            h.draw()?;
+
+            Ok::<(), HandlerError>(())
+        });
+
+        let Some(result) = result else { return };
+
+        if let Err(e) = result {
+            warn!("Error while drawing: {}", e);
+            Self::close(this, false);
+        } else {
+            this.set_next_frame_needed(this.state.redraw_requested.take())
+        }
+    }
+
+    pub(crate) fn trigger_timer(this: ViewRef<Self>, handle: &TimerHandle) {
+        this.window_handler.use_handler(|h| {
+            h.on_timer(handle.into());
+        });
+    }
+
+    pub(crate) fn create_timer(
+        &self, this: &Retained<View<Self>>, duration: Duration,
+    ) -> TimerHandle {
+        let view = Weak::from_retained(this);
+        self.timers.create_timer(view, duration)
+    }
+
+    fn apply_size_constraints(this: ViewRef<Self>) {
+        let ViewParentingType::Windowed { owned_window } = &*this.parenting.borrow() else {
+            return;
+        };
+        let Some(window) = owned_window.load() else { return };
+        let scale_factor = window.backingScaleFactor();
+
+        if let Some(min_size) = this.state.sizing_strategy.min_size() {
+            let min_size = min_size.to_logical(scale_factor);
+            window.setContentMinSize(NSSize::new(min_size.width, min_size.height));
+        }
+
+        if let Some(max_size) = this.state.sizing_strategy.max_size() {
+            let max_size = max_size.to_logical(scale_factor);
+            window.setContentMaxSize(NSSize::new(max_size.width, max_size.height));
+        }
+    }
+}
+
+impl Drop for BaseviewView {
+    fn drop(&mut self) {
+        self.state.closed.set(true);
+    }
+}
+
+impl ViewImpl for BaseviewView {
+    fn become_first_responder(this: ViewRef<Self>) -> bool {
+        let Some(window) = this.view.window() else {
+            return true;
+        };
+
+        if window.isKeyWindow() {
+            Self::trigger_event(this, Event::Window(WindowEvent::Focused));
+        }
+
+        true
+    }
+
+    fn resign_first_responder(this: ViewRef<Self>) -> bool {
+        Self::trigger_event(this, Event::Window(WindowEvent::Unfocused));
+        true
+    }
+
+    fn window_should_close(this: ViewRef<Self>) -> bool {
+        Self::trigger_event(this, Event::Window(WindowEvent::WillClose));
+        Self::close(this, false);
+
+        true
+    }
+
+    fn window_did_resize(this: ViewRef<Self>) {
+        let Some(window) = this.view.window() else { return };
+
+        let size = window.contentRectForFrameRect(window.frame()).size;
+        let size = LogicalSize::new(size.width, size.height);
+
+        BaseviewView::resize(this, size, true, true);
+    }
+
+    fn view_did_change_backing_properties(this: ViewRef<Self>, notify_host: bool) {
+        let current_size = this.view.size();
+        let current_scale_factor = this.view.backing_scale_factor();
+
+        if this.state.scale_factor.get() != current_scale_factor {
+            Self::apply_size_constraints(this);
+        }
+
+        // Only send the event when the window's size has actually changed to be in line with the
+        // other platform implementations
+        if this.state.scale_factor.get() != current_scale_factor
+            || this.state.size.get() != current_size
+        {
+            let previous = this.state.size.replace(current_size);
+            this.state.scale_factor.set(current_scale_factor);
+            let new_size = WindowSize::from_logical(current_size, current_scale_factor);
+
+            let result = this.window_handler.use_handler(|h| h.resized(new_size));
+
+            if let Some(Err(e)) = result {
+                warn!("Window Handler failed to resize: {}", e);
+                this.state.size.set(previous);
+
+                Self::resize(this, previous, false, false);
+                return;
+            }
+
+            if notify_host {
+                if let Err(e) = this.host.request_resize(new_size) {
+                    warn!("Host failed to resize parent view: {}", e);
+
+                    Self::resize(this, previous, false, false);
+                }
+            }
+        }
+    }
+
+    fn draw_rect(this: ViewRef<Self>, _rect: NSRect) {
+        this.window_handler.use_handler(|h| {
+            let mut rects_ptr = null();
+            let mut rects_count = 0;
+            unsafe { this.view.getRectsBeingDrawn_count(&mut rects_ptr, &mut rects_count) };
+
+            let rects_count: usize = rects_count.try_into().unwrap_or(0);
+            let rects;
+
+            let damage_area = if rects_count == 0 {
+                DamageArea::FullWindow
+            } else {
+                let scale_factor = this.view.backing_scale_factor();
+
+                let rects_raw = unsafe { core::slice::from_raw_parts(rects_ptr, rects_count) };
+
+                rects = rects_raw
+                    .iter()
+                    .map(|r| DamageRect::from_rect(*r, scale_factor).into())
+                    .collect::<Vec<_>>();
+
+                DamageArea::Rects(&rects)
+            };
+
+            h.damage(damage_area);
+        });
+
+        this.set_next_frame_needed(true);
+    }
+
+    fn display_link_fired(this: ViewRef<Self>, _sender: &CADisplayLink) {
+        Self::trigger_frame(this);
+    }
+
+    /// `hitTest:` override that collapses hits on baseview's internal
+    /// OpenGL render subview to this NSView.
+    ///
+    /// `src/gl/gl` attaches an `NSOpenGLView` as a subview of this
+    /// view so the GL context is isolated from event handling. The side
+    /// effect is that `[NSView hitTest:]` returns the GL subview for
+    /// every click inside our frame — `NSOpenGLView` inherits the
+    /// default `acceptsFirstMouse:` which returns `NO`, so AppKit treats
+    /// the first click in a non-key window as an activation click and
+    /// never dispatches `mouseDown:`. That's the "first click dead zone"
+    /// symptom reported in baseview#129 / #202 / #169.
+    ///
+    /// Fix: if the hit lands on our own GL render subview (pointer
+    /// equality against the `NSOpenGLView` stored in `GlContext`),
+    /// collapse the result to `self`. AppKit then asks US about
+    /// `acceptsFirstMouse:` (we return `YES`), and `mouseDown:` is
+    /// dispatched on the first click. Hits on any other subview pass
+    /// through unchanged — we only redirect our own render child, not
+    /// anything the consumer may add.
+    ///
+    /// No-op without the `opengl` feature: there's no GL subview to
+    /// collapse, so the override pass-through is equivalent to the
+    /// default implementation.
+    fn hit_test(this: ViewRef<'_, Self>, point: NSPoint) -> Option<&NSView> {
+        let superclass = NSView::class();
+
+        // SAFETY: Our superclass is NSView
+        let super_result: Option<&NSView> =
+            unsafe { msg_send![super(this.view, superclass), hitTest: point] };
+        let super_result = super_result?;
+
+        #[cfg(feature = "opengl")]
+        {
+            if let Some(gl_context) = this.gl_context.get() {
+                if *super_result == **gl_context.view {
+                    return Some(this.view);
+                }
+            }
+        }
+
+        Some(super_result)
+    }
+
+    fn view_will_move_to_window(this: ViewRef<Self>, new_window: Option<&NSWindow>) {
+        let tracking_areas = this.view.trackingAreas();
+
+        match new_window {
+            None => {
+                if tracking_areas.count() > 0 {
+                    let tracking_area = tracking_areas.objectAtIndex(0);
+                    this.view.removeTrackingArea(&tracking_area);
+                }
+            }
+            Some(new_window) => {
+                if tracking_areas.is_empty() {
+                    let tracking_area = new_tracking_area(this.view);
+                    this.view.addTrackingArea(&tracking_area);
+                }
+
+                new_window.setAcceptsMouseMovedEvents(true);
+                new_window.makeFirstResponder(Some(this.view));
+            }
+        }
+
+        unsafe {
+            let () = msg_send![super(this.view, NSView::class()), viewWillMoveToWindow: new_window];
+        }
+    }
+
+    fn update_tracking_areas(this: ViewRef<Self>) {
+        let tracking_areas = this.view.trackingAreas();
+        if tracking_areas.count() > 0 {
+            let tracking_area = tracking_areas.objectAtIndex(0);
+            this.view.removeTrackingArea(&tracking_area);
+        }
+
+        let tracking_area = new_tracking_area(this.view);
+
+        this.view.addTrackingArea(&tracking_area);
+    }
+
+    fn mouse_moved(this: ViewRef<Self>, event: &NSEvent) {
+        let point = this.view.convertPoint_fromView(event.locationInWindow(), None);
+
+        let position = LogicalPosition { x: point.x, y: point.y };
+
+        Self::trigger_event(
+            this,
+            Event::Mouse(MouseEvent::CursorMoved {
+                position: position.to_physical(this.state.scale_factor.get()),
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+
+        // SAFETY: Our superclass is NSView
+        let _: () = unsafe { msg_send![super(this.view, NSView::class()), mouseMoved: event] };
+    }
+
+    fn scroll_wheel(this: ViewRef<Self>, event: &NSEvent) {
+        let x = event.scrollingDeltaX() as f32;
+        let y = event.scrollingDeltaY() as f32;
+
+        let delta = if event.hasPreciseScrollingDeltas() {
+            ScrollDelta::Pixels { x, y }
+        } else {
+            ScrollDelta::Lines { x, y }
+        };
+
+        Self::trigger_event(
+            this,
+            Event::Mouse(MouseEvent::WheelScrolled {
+                delta,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn dragging_entered(
+        this: ViewRef<Self>, sender: Option<&ProtocolObject<dyn NSDraggingInfo>>,
+    ) -> NSDragOperation {
+        let modifiers = this.keyboard_state.last_mods();
+        let drop_data = get_drop_data(sender);
+
+        let event = MouseEvent::DragEntered {
+            position: get_drag_position(sender).to_physical(this.view.backing_scale_factor()),
+            modifiers: make_modifiers(modifiers),
+            data: drop_data,
+        };
+
+        on_event(this, event)
+    }
+
+    fn dragging_updated(
+        this: ViewRef<Self>, sender: Option<&ProtocolObject<dyn NSDraggingInfo>>,
+    ) -> NSDragOperation {
+        let modifiers = this.keyboard_state.last_mods();
+        let drop_data = get_drop_data(sender);
+
+        let event = MouseEvent::DragMoved {
+            position: get_drag_position(sender).to_physical(this.view.backing_scale_factor()),
+            modifiers: make_modifiers(modifiers),
+            data: drop_data,
+        };
+
+        on_event(this, event)
+    }
+
+    fn prepare_for_drag_operation(
+        _this: ViewRef<Self>, _sender: Option<&ProtocolObject<dyn NSDraggingInfo>>,
+    ) -> bool {
+        // Always accept drag operation if we get this far
+        // This function won't be called unless dragging_entered/updated
+        // has returned an acceptable operation
+        true
+    }
+
+    fn perform_drag_operation(
+        this: ViewRef<Self>, sender: Option<&ProtocolObject<dyn NSDraggingInfo>>,
+    ) -> bool {
+        let modifiers = this.keyboard_state.last_mods();
+        let drop_data = get_drop_data(sender);
+
+        let event = MouseEvent::DragDropped {
+            position: get_drag_position(sender).to_physical(this.view.backing_scale_factor()),
+            modifiers: make_modifiers(modifiers),
+            data: drop_data,
+        };
+
+        let event_status = Self::trigger_event(this, Event::Mouse(event));
+
+        matches!(event_status, EventStatus::AcceptDrop(_))
+    }
+
+    fn dragging_exited(this: ViewRef<Self>, _sender: Option<&ProtocolObject<dyn NSDraggingInfo>>) {
+        on_event(this, MouseEvent::DragLeft);
+    }
+
+    fn handle_notification(this: ViewRef<Self>, notification: &NSNotification) {
+        let Some(window) = this.view.window() else { return };
+        // The subject of the notification, in this case an NSWindow object.
+        let Some(notification_object) = notification.object().and_then(|o| o.downcast().ok())
+        else {
+            return;
+        };
+
+        // Only trigger focus events if the NSWindow that's being notified about is our window,
+        // and if the window's first responder is our NSView.
+        if window != notification_object {
+            return;
+        }
+
+        let Some(first_responder) = window.firstResponder() else { return };
+
+        // If the first responder isn't our NSView, the focus events will instead be triggered
+        // by the becomeFirstResponder and resignFirstResponder methods on the NSView itself.
+        if !this.view.isEqual(Some(&first_responder)) {
+            return;
+        }
+
+        Self::trigger_event(
+            this,
+            Event::Window(if window.isKeyWindow() {
+                WindowEvent::Focused
+            } else {
+                WindowEvent::Unfocused
+            }),
+        );
+    }
+
+    fn mouse_down(this: ViewRef<Self>, event: &NSEvent) {
+        Self::trigger_event(
+            this,
+            Event::Mouse(ButtonPressed {
+                button: MouseButton::Left,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn mouse_up(this: ViewRef<Self>, event: &NSEvent) {
+        Self::trigger_event(
+            this,
+            Event::Mouse(ButtonReleased {
+                button: MouseButton::Left,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn right_mouse_down(this: ViewRef<Self>, event: &NSEvent) {
+        Self::trigger_event(
+            this,
+            Event::Mouse(ButtonPressed {
+                button: MouseButton::Right,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn right_mouse_up(this: ViewRef<Self>, event: &NSEvent) {
+        Self::trigger_event(
+            this,
+            Event::Mouse(ButtonReleased {
+                button: MouseButton::Right,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn other_mouse_down(this: ViewRef<Self>, event: &NSEvent) {
+        Self::trigger_event(
+            this,
+            Event::Mouse(ButtonPressed {
+                button: MouseButton::Middle,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn other_mouse_up(this: ViewRef<Self>, event: &NSEvent) {
+        Self::trigger_event(
+            this,
+            Event::Mouse(ButtonReleased {
+                button: MouseButton::Middle,
+                modifiers: make_modifiers(event.modifierFlags()),
+            }),
+        );
+    }
+
+    fn mouse_entered(this: ViewRef<Self>) {
+        this.cursor_manager.set_is_inside(true);
+        Self::trigger_event(this, Event::Mouse(MouseEvent::CursorEntered));
+    }
+
+    fn mouse_exited(this: ViewRef<Self>) {
+        this.cursor_manager.set_is_inside(false);
+        Self::trigger_event(this, Event::Mouse(MouseEvent::CursorLeft));
+    }
+
+    fn cursor_update(this: ViewRef<Self>, event: Option<&NSEvent>) -> bool {
+        let Some(event) = event else { return false };
+        let point = this.view.convertPoint_fromView(event.locationInWindow(), None);
+        if NSPointInRect(point, this.view.frame()) {
+            this.cursor_manager.update_to_current_cursor();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn key_down(this: ViewRef<Self>, event: &NSEvent) {
+        if let Some(key_event) = this.keyboard_state.process_native_event(event) {
+            let status = Self::trigger_event(this, Event::Keyboard(key_event));
+
+            if let EventStatus::Ignored = status {
+                unsafe {
+                    let superclass = msg_send![this.view, superclass];
+
+                    let () = msg_send![super(this.view, superclass), keyDown:event];
+                }
+            }
+        }
+    }
+
+    fn key_up(this: ViewRef<Self>, event: &NSEvent) {
+        if let Some(key_event) = this.keyboard_state.process_native_event(event) {
+            let status = Self::trigger_event(this, Event::Keyboard(key_event));
+
+            if let EventStatus::Ignored = status {
+                unsafe {
+                    let superclass = msg_send![this.view, superclass];
+
+                    let () = msg_send![super(this.view, superclass), keyUp:event];
+                }
+            }
+        }
+    }
+
+    fn flags_changed(this: ViewRef<Self>, event: &NSEvent) {
+        if let Some(key_event) = this.keyboard_state.process_native_event(event) {
+            let status = Self::trigger_event(this, Event::Keyboard(key_event));
+
+            if let EventStatus::Ignored = status {
+                unsafe {
+                    let superclass = msg_send![this.view, superclass];
+
+                    let () = msg_send![super(this.view, superclass), flagsChanged:event];
+                }
+            }
+        }
+    }
+}
+
+/// Info:
+/// https://developer.apple.com/documentation/appkit/nstrackingarea
+/// https://developer.apple.com/documentation/appkit/nstrackingarea/options
+/// https://developer.apple.com/documentation/appkit/nstrackingareaoptions.
+fn new_tracking_area(this: &NSView) -> Retained<NSTrackingArea> {
+    let options = NSTrackingAreaOptions::MouseEnteredAndExited
+        | NSTrackingAreaOptions::MouseMoved
+        | NSTrackingAreaOptions::CursorUpdate
+        //| NSTrackingAreaOptions::ActiveInActiveApp
+        | NSTrackingAreaOptions::ActiveInKeyWindow
+        | NSTrackingAreaOptions::InVisibleRect
+        | NSTrackingAreaOptions::EnabledDuringMouseDrag;
+
+    // SAFETY: `this` is of the correct type (NSView)
+    unsafe {
+        NSTrackingArea::initWithRect_options_owner_userInfo(
+            NSTrackingArea::alloc(),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)),
+            options,
+            Some(this),
+            None,
+        )
+    }
+}
+
+fn get_drag_position(sender: Option<&ProtocolObject<dyn NSDraggingInfo>>) -> LogicalPosition<f64> {
+    let point = match sender {
+        Some(sender) => sender.draggingLocation(),
+        None => NSPoint::ZERO,
+    };
+
+    LogicalPosition::new(point.x, point.y)
+}
+
+fn get_drop_data(sender: Option<&ProtocolObject<dyn NSDraggingInfo>>) -> DropData {
+    let Some(sender) = sender else {
+        return DropData::None;
+    };
+
+    let pasteboard = sender.draggingPasteboard();
+    let Some(file_list) = pasteboard.propertyListForType(unsafe { NSFilenamesPboardType }) else {
+        return DropData::None;
+    };
+
+    let Ok(file_list) = file_list.downcast::<NSArray>() else {
+        return DropData::None;
+    };
+
+    let files = file_list
+        .into_iter()
+        .filter_map(|s| s.downcast::<NSString>().ok())
+        .map(|s| s.to_string().into())
+        .collect();
+
+    DropData::Files(files)
+}
+
+fn on_event(this: ViewRef<BaseviewView>, event: MouseEvent) -> NSDragOperation {
+    let event_status = BaseviewView::trigger_event(this, Event::Mouse(event));
+    match event_status {
+        EventStatus::AcceptDrop(DropEffect::Copy) => NSDragOperation::Copy,
+        EventStatus::AcceptDrop(DropEffect::Move) => NSDragOperation::Move,
+        EventStatus::AcceptDrop(DropEffect::Link) => NSDragOperation::Link,
+        EventStatus::AcceptDrop(DropEffect::Scroll) => NSDragOperation::Generic,
+        _ => NSDragOperation::None,
+    }
+}
+
+pub struct WindowHandlerContainer {
+    inner: RefCell<Option<Box<dyn WindowHandler>>>,
+    must_be_destroyed: Cell<bool>,
+}
+
+impl WindowHandlerContainer {
+    pub fn new() -> WindowHandlerContainer {
+        Self { inner: RefCell::new(None), must_be_destroyed: false.into() }
+    }
+
+    pub fn use_handler<T>(&self, user: impl FnOnce(&dyn WindowHandler) -> T) -> Option<T> {
+        let returned = {
+            let inner = self.inner.try_borrow().ok()?;
+            user(inner.as_ref()?.as_ref())
+        };
+
+        if self.must_be_destroyed.get() {
+            if let Ok(mut inner) = self.inner.try_borrow_mut() {
+                *inner = None;
+            }
+        }
+
+        Some(returned)
+    }
+
+    pub fn set(&self, handler: Box<dyn WindowHandler>) {
+        self.inner.replace(Some(handler));
+        self.must_be_destroyed.set(false);
+    }
+
+    pub fn destroy(&self) {
+        match self.inner.try_borrow_mut() {
+            Ok(mut inner) => *inner = None,
+            Err(_) => self.must_be_destroyed.set(true),
+        }
+    }
+}

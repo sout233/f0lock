@@ -1,0 +1,544 @@
+use crate::dpi::{PhysicalPosition, PhysicalSize};
+use crate::wrappers::win32::dpi::{Dpi, DpiAwarenessGuard};
+use crate::wrappers::win32::style::WindowStyle;
+use crate::wrappers::win32::user32::ExtendedUser32;
+use crate::wrappers::win32::{DpiAwarenessContext, ExtendedShCore, Rect, TimerId};
+use std::ffi::c_void;
+use std::num::NonZeroU32;
+use std::ptr::{null_mut, NonNull};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+use windows::Win32::System::Ole::IDropTarget;
+use windows_core::{Error, Interface, InterfaceRef, Result, HRESULT};
+use windows_sys::Win32::Foundation::{SetLastError, FALSE, HWND, LPARAM, POINT, S_OK, WPARAM};
+use windows_sys::Win32::Graphics::Gdi::{
+    GetUpdateRect, InvalidateRect, MonitorFromWindow, ScreenToClient, ValidateRect,
+    MONITOR_DEFAULTTOPRIMARY,
+};
+use windows_sys::Win32::System::Ole::{RegisterDragDrop, RevokeDragDrop};
+use windows_sys::Win32::UI::HiDpi::{DPI_HOSTING_BEHAVIOR_MIXED, MDT_DEFAULT};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    GetFocus, ReleaseCapture, SetCapture, SetFocus, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
+};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    DestroyWindow, GetWindowLongPtrW, GetWindowLongW, KillTimer, PostMessageW, SetParent, SetTimer,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, GWLP_USERDATA, GWL_EXSTYLE, GWL_STYLE,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SW_HIDE, SW_SHOW, WINDOW_LONG_PTR_INDEX, WM_USER,
+};
+
+pub(crate) const BV_WINDOW_MUST_CLOSE: u32 = WM_USER + 1;
+pub(crate) const BV_REQUEST_REDRAW: u32 = WM_USER + 2;
+pub(crate) const BV_REQUEST_POLL: u32 = WM_USER + 3;
+
+/// A simple wrapper around a HWND.
+///
+/// This type guarantees the HWND is safe to use, but not that it remains valid. (i.e. functions using
+/// a handle from this type might still return an "invalid handle" error).
+///
+/// The role of this type is to help safely encapsulating most of the unsafe Win32 HWND APIs.
+#[derive(Copy, Clone, PartialEq, Debug, Eq)]
+pub struct HWnd(NonNull<c_void>);
+
+impl HWnd {
+    pub unsafe fn from_raw(hwnd: NonNull<c_void>) -> Self {
+        Self(hwnd)
+    }
+
+    pub fn as_raw(&self) -> HWND {
+        self.0.as_ptr()
+    }
+
+    pub fn get_userdata_ptr<T>(&self) -> Option<NonNull<T>> {
+        let ptr = unsafe { GetWindowLongPtrW(self.as_raw(), GWLP_USERDATA) };
+        NonNull::new(ptr as *mut T)
+    }
+
+    pub fn set_userdata_ptr<T>(&self, data: *const T) -> Result<()> {
+        // SAFETY: This function is always safe to call
+        unsafe { SetLastError(0) };
+        // SAFETY: This type guarantees the HWND is safe to use.
+        let previous = unsafe { SetWindowLongPtrW(self.as_raw(), GWLP_USERDATA, data as isize) };
+        if previous != 0 {
+            return Ok(());
+        }
+
+        // We can't know if a return value of 0 is indicative of an error, or if it's just because the
+        // previous value was 0. So we check GetLastError instead (called by Error::from_thread).
+        let error = Error::from_thread();
+        if error.code() == HRESULT(0) {
+            return Ok(());
+        }
+
+        Err(error)
+    }
+
+    pub fn get_long(&self, index: WINDOW_LONG_PTR_INDEX) -> Result<i32> {
+        // SAFETY: This function is always safe to call
+        unsafe { SetLastError(0) };
+        // SAFETY: This type guarantees the HWND is still valid.
+        let result = unsafe { GetWindowLongW(self.as_raw(), index) };
+        if result != 0 {
+            return Ok(result);
+        }
+
+        // We can't know if a return value of 0 is indicative of an error, or if it's just because the
+        // value was actually 0. So we check GetLastError instead (called by Error::from_thread).
+        let error = Error::from_thread();
+        if error.code() == HRESULT(0) {
+            return Ok(result);
+        }
+
+        Err(error)
+    }
+
+    pub fn get_style(&self) -> Result<WindowStyle> {
+        Ok(WindowStyle {
+            style: self.get_long(GWL_STYLE)? as _,
+            style_ex: self.get_long(GWL_EXSTYLE)? as _,
+        })
+    }
+
+    pub fn set_parent(&self, parent: &HWnd) -> Result<()> {
+        let result = unsafe { SetParent(self.as_raw(), parent.as_raw()) };
+
+        if result.is_null() {
+            return Err(Error::from_thread());
+        }
+
+        Ok(())
+    }
+
+    pub fn get_dpi(&self, extended_user32: &ExtendedUser32) -> Option<Dpi> {
+        // SAFETY: This type guarantees the HWND is safe to use.
+        match NonZeroU32::new(unsafe { extended_user32.get_dpi_for_window?(self.as_raw()) }) {
+            None => {
+                crate::warn!("Could not get DPI for window: {}", Error::from_thread());
+                None
+            }
+            Some(dpi) => Some(Dpi(dpi)),
+        }
+    }
+
+    pub fn get_dpi_from_monitor(&self, shcore: &ExtendedShCore) -> Option<Dpi> {
+        let get_dpi_for_monitor = shcore.get_dpi_for_monitor?;
+
+        let monitor = unsafe { MonitorFromWindow(self.as_raw(), MONITOR_DEFAULTTOPRIMARY) };
+        if monitor.is_null() {
+            return None;
+        }
+
+        let mut x = 0;
+        let mut _y = 0;
+
+        let result = HRESULT(unsafe { get_dpi_for_monitor(monitor, MDT_DEFAULT, &mut x, &mut _y) });
+        if result.is_err() {
+            crate::warn!("GetDpiForMonitor failed: {}", result.message());
+            return None;
+        }
+
+        Some(Dpi(NonZeroU32::new(x)?))
+    }
+
+    pub fn register_drag_drop(&self, drop_target: InterfaceRef<IDropTarget>) -> Result<()> {
+        // SAFETY: This type guarantees the HWND is safe to use,
+        // and the interface pointer comes from a valid InterfaceRef.
+        let result = unsafe { RegisterDragDrop(self.as_raw(), drop_target.as_raw()) };
+
+        match result {
+            S_OK => Ok(()),
+            e => Err(Error::new(HRESULT(e), "RegisterDragDrop failed")),
+        }
+    }
+
+    pub fn revoke_drag_drop(&self) -> Result<()> {
+        let result = unsafe { RevokeDragDrop(self.as_raw()) };
+
+        match result {
+            S_OK => Ok(()),
+            e => Err(Error::new(HRESULT(e), "RevokeDragDrop failed")),
+        }
+    }
+
+    pub fn resize_nc_and_activate(&self, size: PhysicalSize<u32>) -> Result<()> {
+        let result = unsafe {
+            SetWindowPos(
+                self.as_raw(),
+                null_mut(), // Ignored by SWP_NOZORDER
+                0,          // Ignored by SWP_NOMOVE
+                0,          // Ignored by SWP_NOMOVE
+                size.width.try_into().unwrap_or(i32::MAX),
+                size.height.try_into().unwrap_or(i32::MAX),
+                SWP_NOZORDER | SWP_NOMOVE,
+            )
+        };
+
+        if result == 0 {
+            return Err(Error::from_thread());
+        }
+
+        Ok(())
+    }
+
+    pub fn resize_and_activate(
+        &self, client_size: PhysicalSize<u32>, window_dpi: Dpi, dpi_ctx: &DpiAwarenessGuard,
+    ) -> Result<()> {
+        let style = self.get_style()?;
+
+        let rect = Rect::from(client_size);
+        let rect = dpi_ctx.client_area_to_nc_area(rect, style, Some(window_dpi))?;
+
+        self.resize_nc_and_activate(rect.size())
+    }
+
+    /// Returns true if the window was previously visible, false otherwise.
+    pub fn show_and_activate(&self) -> bool {
+        let result = unsafe { ShowWindow(self.as_raw(), SW_SHOW) };
+
+        result != 0
+    }
+
+    pub fn hide(&self) {
+        unsafe { ShowWindow(self.as_raw(), SW_HIDE) };
+    }
+
+    pub fn set_nc_rect(&self, nc_rect: Rect) -> Result<()> {
+        let size = nc_rect.size();
+
+        let result = unsafe {
+            SetWindowPos(
+                self.as_raw(),
+                null_mut(), // Ignored by SWP_NOZORDER
+                nc_rect.0.left,
+                nc_rect.0.top,
+                size.width.try_into().unwrap_or(i32::MAX),
+                size.height.try_into().unwrap_or(i32::MAX),
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+
+        if result == 0 {
+            return Err(Error::from_thread());
+        }
+
+        Ok(())
+    }
+
+    pub fn create_timer(&self, elapse: u32) -> Result<TimerId> {
+        static NEXT_TIMER_ID: AtomicUsize = AtomicUsize::new(1);
+
+        let raw_id = NEXT_TIMER_ID
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .map_err(|_| {
+                Error::from_hresult(HRESULT::from_win32(
+                    windows_sys::Win32::Foundation::ERROR_ARITHMETIC_OVERFLOW,
+                ))
+            })?;
+        let timer_id = TimerId::from_raw(raw_id).unwrap();
+
+        self.reset_timer(timer_id, elapse)?;
+
+        Ok(timer_id)
+    }
+
+    pub fn reset_timer(&self, timer_id: TimerId, elapse: u32) -> Result<()> {
+        let result = unsafe { SetTimer(self.as_raw(), timer_id.as_raw(), elapse, None) };
+
+        if result == 0 {
+            return Err(Error::from_thread());
+        }
+        Ok(())
+    }
+
+    pub fn kill_timer(&self, timer_id: TimerId) -> Result<()> {
+        let result = unsafe { KillTimer(self.as_raw(), timer_id.as_raw()) };
+
+        if result == FALSE {
+            return Err(Error::from_thread());
+        }
+
+        Ok(())
+    }
+
+    pub fn set_focus(&self) -> Result<()> {
+        let previous = unsafe { SetFocus(self.as_raw()) };
+        if !previous.is_null() {
+            return Ok(());
+        }
+
+        // We can't know if a return value of 0 is indicative of an error, or if it's just because the
+        // previous value was 0. So we check GetLastError instead (called by Error::from_thread).
+        let error = Error::from_thread();
+        if error.code() == HRESULT(0) {
+            return Ok(());
+        }
+
+        Err(error)
+    }
+
+    pub fn destroy(&self) -> Result<()> {
+        let result = unsafe { DestroyWindow(self.as_raw()) };
+
+        if result == 0 {
+            return Err(Error::from_thread());
+        }
+
+        Ok(())
+    }
+
+    pub fn get_focused_window() -> HWND {
+        // SAFETY: this is always safe to call
+        unsafe { GetFocus() }
+    }
+
+    pub fn set_capture(&self) {
+        // SAFETY: This type guarantees the HWND is safe to use.
+        unsafe { SetCapture(self.as_raw()) };
+    }
+
+    pub fn release_capture() {
+        // SAFETY: this is always safe to call
+        unsafe { ReleaseCapture() };
+    }
+
+    pub fn start_cursor_leave_tracking(&self) -> Result<()> {
+        let mut track = TRACKMOUSEEVENT {
+            cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+            dwFlags: TME_LEAVE,
+            dwHoverTime: 0,
+            hwndTrack: self.as_raw(),
+        };
+
+        // SAFETY: eventtrack pointer comes from a reference, and the struct it points to is filled
+        // correctly
+        match unsafe { TrackMouseEvent(&mut track) } {
+            0 => Err(Error::from_thread()),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn screen_to_client(&self, pt: PhysicalPosition<i32>) -> Result<PhysicalPosition<i32>> {
+        let mut pt = POINT { x: pt.x, y: pt.y };
+        let result = unsafe { ScreenToClient(self.as_raw(), &mut pt as *mut POINT) };
+
+        if result == 0 {
+            return Err(Error::from_thread());
+        }
+
+        Ok(PhysicalPosition::new(pt.x, pt.y))
+    }
+
+    pub fn get_update_rect(&self) -> Option<Rect> {
+        let mut rect = Rect::EMPTY;
+
+        let result = unsafe { GetUpdateRect(self.as_raw(), &mut rect.0, FALSE) };
+
+        if result == 0 || rect.is_empty() {
+            return None;
+        }
+
+        Some(rect)
+    }
+
+    pub fn validate_rect(&self, rect: Rect) {
+        let _ = unsafe { ValidateRect(self.as_raw(), &rect.0) };
+    }
+
+    pub fn invalidate_window(&self) {
+        let _ = unsafe { InvalidateRect(self.as_raw(), null_mut(), FALSE) };
+    }
+
+    #[cfg(feature = "opengl")]
+    pub fn get_own_dc(&self) -> Result<super::OwnDeviceContext> {
+        super::OwnDeviceContext::from_window(*self)
+    }
+
+    pub fn supports_mixed_dpi_hosting_behavior(&self, user32: &ExtendedUser32) -> bool {
+        let Some(get_window_dpi_hosting_behavior) = user32.get_window_dpi_hosting_behavior else {
+            return false;
+        };
+
+        let result = unsafe { get_window_dpi_hosting_behavior(self.as_raw()) };
+
+        result == DPI_HOSTING_BEHAVIOR_MIXED
+    }
+
+    pub fn get_dpi_awareness_context(
+        &self, user32: &ExtendedUser32,
+    ) -> Option<DpiAwarenessContext> {
+        let result = unsafe { user32.get_window_dpi_awareness_context?(self.as_raw()) };
+
+        let Some(raw) = NonNull::new(result) else {
+            crate::warn!("Failed to get DpiAwarenessContext from window: {}", Error::from_thread());
+            return None;
+        };
+
+        let ctx = DpiAwarenessContext::from_raw(raw);
+
+        if ctx.is_valid(user32) == Some(false) {
+            return None;
+        }
+
+        Some(ctx)
+    }
+
+    pub fn enable_non_client_dpi_scaling(&self, user32: &ExtendedUser32) {
+        let Some(enable) = user32.enable_non_client_dpi_scaling else { return };
+        let result = unsafe { enable(self.as_raw()) };
+
+        if result == FALSE {
+            crate::warn!(
+                "Could not enable non-client DPI scaling for window: {}",
+                Error::from_thread()
+            );
+        }
+    }
+}
+
+pub struct SyncHwnd(HWnd);
+
+// SAFETY: we only implement thread-safe operations on this handle
+unsafe impl Send for SyncHwnd {}
+// SAFETY: same as above
+unsafe impl Sync for SyncHwnd {}
+
+impl From<HWnd> for SyncHwnd {
+    fn from(hwnd: HWnd) -> Self {
+        SyncHwnd(hwnd)
+    }
+}
+
+pub trait PostMessageExt {
+    /// # Safety
+    ///
+    /// The message, wparam and lparam values must be valid.
+    unsafe fn post_message(&self, message: u32, wparam: WPARAM, lparam: LPARAM);
+
+    #[inline]
+    fn post_must_close(&self) {
+        unsafe { self.post_message(BV_WINDOW_MUST_CLOSE, 0, 0) }
+    }
+
+    #[inline]
+    fn post_request_redraw(&self, duration: Duration) {
+        let duration_msec = duration.as_millis();
+        let duration_msec: usize = duration_msec.try_into().unwrap_or(usize::MAX);
+
+        unsafe { self.post_message(BV_REQUEST_REDRAW, duration_msec, 0) }
+    }
+
+    #[inline]
+    fn post_request_poll(&self) {
+        unsafe { self.post_message(BV_REQUEST_POLL, 0, 0) }
+    }
+}
+
+impl PostMessageExt for HWnd {
+    unsafe fn post_message(&self, message: u32, wparam: WPARAM, lparam: LPARAM) {
+        let result = unsafe { PostMessageW(self.as_raw(), message, wparam, lparam) };
+
+        if result == 0 {
+            let error = Error::from_thread();
+            crate::warn!("Failed to post message to window: {}", error)
+        }
+    }
+}
+
+impl PostMessageExt for SyncHwnd {
+    #[inline]
+    unsafe fn post_message(&self, message: u32, wparam: WPARAM, lparam: LPARAM) {
+        self.0.post_message(message, wparam, lparam)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wrappers::win32::TimerSlot;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, PeekMessageW, MSG, PM_REMOVE, WM_TIMER,
+    };
+
+    #[test]
+    fn stopped_redraw_timers_leave_no_thread_timers() {
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let raw = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                class.as_ptr(),
+                0,
+                0,
+                0,
+                100,
+                100,
+                null_mut(),
+                null_mut(),
+                null_mut(),
+                std::ptr::null(),
+            )
+        };
+        let window = unsafe { HWnd::from_raw(NonNull::new(raw).unwrap()) };
+        let redraw = TimerSlot::empty(window);
+
+        for _ in 0..64 {
+            redraw.start_if_not_running(10);
+            assert!(redraw.is_running());
+            redraw.kill();
+        }
+
+        std::thread::sleep(Duration::from_millis(30));
+        let mut leaked = Vec::new();
+        let mut message = MSG::default();
+        while unsafe { PeekMessageW(&mut message, null_mut(), WM_TIMER, WM_TIMER, PM_REMOVE) } != 0
+        {
+            if message.hwnd.is_null() {
+                leaked.push(message.wParam);
+                assert_ne!(unsafe { KillTimer(null_mut(), message.wParam) }, 0);
+            }
+        }
+
+        window.destroy().unwrap();
+        assert!(
+            leaked.is_empty(),
+            "Stopped redraw timers leaked {} active thread timers",
+            leaked.len()
+        );
+    }
+
+    #[test]
+    fn simultaneous_window_timers_fire_independently() {
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let raw = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                class.as_ptr(),
+                0,
+                0,
+                0,
+                100,
+                100,
+                null_mut(),
+                null_mut(),
+                null_mut(),
+                std::ptr::null(),
+            )
+        };
+        let window = unsafe { HWnd::from_raw(NonNull::new(raw).unwrap()) };
+        let first = window.create_timer(10).unwrap();
+        let second = window.create_timer(10).unwrap();
+        assert_ne!(first, second);
+
+        std::thread::sleep(Duration::from_millis(30));
+        let mut fired = std::collections::HashSet::new();
+        let mut message = MSG::default();
+        while unsafe { PeekMessageW(&mut message, raw, WM_TIMER, WM_TIMER, PM_REMOVE) } != 0 {
+            fired.insert(message.wParam);
+        }
+
+        window.kill_timer(first).unwrap();
+        window.kill_timer(second).unwrap();
+        window.destroy().unwrap();
+        assert_eq!(fired, [first.as_raw(), second.as_raw()].into_iter().collect());
+    }
+}

@@ -1,0 +1,91 @@
+use std::ffi::{c_void, CStr, CString};
+use std::marker::PhantomData;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GlConfig {
+    pub version: (u8, u8),
+    pub profile: Profile,
+    pub red_bits: u8,
+    pub blue_bits: u8,
+    pub green_bits: u8,
+    pub alpha_bits: u8,
+    pub depth_bits: u8,
+    pub stencil_bits: u8,
+    pub samples: Option<u8>,
+    pub srgb: bool,
+    #[deprecated(since = "0.3.3", note = "This is now always enabled.")]
+    pub double_buffer: bool,
+    #[deprecated(
+        since = "0.3.3",
+        note = "This should never be enabled in plugins, it blocks the main thread until the next frame."
+    )]
+    pub vsync: bool,
+}
+
+impl Default for GlConfig {
+    #[allow(deprecated, reason = "This is the Default impl, we need to set these still.")]
+    fn default() -> Self {
+        GlConfig {
+            version: (3, 2),
+            profile: Profile::Core,
+            red_bits: 8,
+            blue_bits: 8,
+            green_bits: 8,
+            alpha_bits: 8,
+            depth_bits: 24,
+            stencil_bits: 8,
+            samples: None,
+            srgb: true,
+            double_buffer: true,
+            vsync: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[expect(
+    clippy::exhaustive_enums,
+    reason = "We don't expect to add new profiles until a new major version"
+)]
+pub enum Profile {
+    Compatibility,
+    Core,
+}
+
+#[derive(Clone)]
+pub struct GlContext {
+    inner: crate::platform::gl::GlContext,
+    // To make sure this is !Send, !Sync, and !UnwindSafe on all platforms
+    phantom: PhantomData<(*mut (), &'static mut ())>,
+}
+
+impl GlContext {
+    pub(crate) fn new(context: crate::platform::gl::GlContext) -> GlContext {
+        GlContext { inner: context, phantom: PhantomData }
+    }
+
+    pub unsafe fn make_current(&self) -> Result<(), crate::Error> {
+        self.inner.make_current()?;
+        Ok(())
+    }
+
+    pub unsafe fn make_not_current(&self) -> Result<(), crate::Error> {
+        self.inner.make_not_current()?;
+        Ok(())
+    }
+
+    pub fn get_proc_address_from_str(&self, symbol: impl Into<Vec<u8>>) -> *const c_void {
+        let Ok(symbol) = CString::new(symbol) else { return std::ptr::null() };
+
+        self.get_proc_address(&symbol)
+    }
+
+    pub fn get_proc_address(&self, symbol: &CStr) -> *const c_void {
+        self.inner.get_proc_address(symbol)
+    }
+
+    pub fn swap_buffers(&self) -> Result<(), crate::Error> {
+        self.inner.swap_buffers()?;
+        Ok(())
+    }
+}

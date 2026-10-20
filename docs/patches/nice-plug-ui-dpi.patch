@@ -1,0 +1,172 @@
+diff --git a/crates/nice-plug-egui/Cargo.toml b/crates/nice-plug-egui/Cargo.toml
+index 4e1b9783..2a07de1b 100644
+--- a/crates/nice-plug-egui/Cargo.toml
++++ b/crates/nice-plug-egui/Cargo.toml
+@@ -13,6 +13,7 @@ keywords = ["gui", "nice-plug", "plugin", "clap", "vst3"]
+ categories = ["gui"]
+ 
+ [features]
++dpi-trace = ["egui-baseview/dpi-trace"]
+ default = ["opengl"]
+ opengl = ["egui-baseview/opengl"]
+ wgpu = ["egui-baseview/wgpu"]
+diff --git a/crates/nice-plug-egui/src/editor.rs b/crates/nice-plug-egui/src/editor.rs
+index 459e8a27..1902e69c 100644
+--- a/crates/nice-plug-egui/src/editor.rs
++++ b/crates/nice-plug-egui/src/editor.rs
+@@ -104,6 +104,18 @@ struct UserAppWrapper<A: NiceEguiApp> {
+     egui_state: Arc<EguiEditorState>,
+ }
+ 
++impl<A: NiceEguiApp> Drop for UserAppWrapper<A> {
++    fn drop(&mut self) {
++        #[cfg(all(feature = "dpi-trace", target_os = "windows"))]
++        egui_baseview::diagnostics::event(
++            "nice_closed",
++            format_args!("state={:?}", self.egui_state),
++        );
++        *self.egui_ctx.lock() = None;
++        self.user_app.lock().editor_closed();
++    }
++}
++
+ impl<A: NiceEguiApp> egui_baseview::App for UserAppWrapper<A> {
+     fn build(
+         &mut self,
+@@ -111,6 +123,9 @@ impl<A: NiceEguiApp> egui_baseview::App for UserAppWrapper<A> {
+         frame: &mut egui_baseview::Frame,
+     ) -> Result<(), baseview::HandlerError> {
+         *self.egui_ctx.lock() = Some(egui_ctx.clone());
++        self.egui_state
++            .system_scale_factor
++            .store(Some(frame.baseview_window().size().scale_factor as f32));
+ 
+         self.user_app
+             .lock()
+@@ -122,9 +137,9 @@ impl<A: NiceEguiApp> egui_baseview::App for UserAppWrapper<A> {
+     }
+ 
+     fn resized(&mut self, size: baseview::WindowSize) {
+-        self.egui_state
+-            .system_scale_factor
+-            .store(Some(size.scale_factor as f32));
++        self.egui_state.system_scale_factor.store(Some(
++            size.scale_factor as f32 / self.egui_state.zoom_factor.load(),
++        ));
+ 
+         let current_size = self.egui_state.size();
+         let new_size = match current_size {
+@@ -167,6 +182,15 @@ impl<A: NiceEguiApp> Editor for EguiEditor<A> {
+         let size = egui_state.size();
+         let zoom_factor = egui_state.zoom_factor.load();
+ 
++        #[cfg(all(feature = "dpi-trace", target_os = "windows"))]
++        egui_baseview::diagnostics::event(
++            "nice_spawn",
++            format_args!(
++                "size={size:?} zoom={zoom_factor} fallback={fallback_scale_factor:?} \
++                 parent={parent:?} state={egui_state:?}"
++            ),
++        );
++
+         let (min_size, max_size): (Option<Size>, Option<Size>) =
+             match self.settings.resize_hint.size_constraints {
+                 SizeConstraints::Logical { min_size, max_size } => {
+@@ -236,7 +260,6 @@ impl<A: NiceEguiApp> Editor for EguiEditor<A> {
+                     })
+             })
+         };
+-
+         let window = EguiWindow::create_with_host(
+             settings,
+             UserAppWrapper {
+@@ -249,6 +272,7 @@ impl<A: NiceEguiApp> Editor for EguiEditor<A> {
+         )?;
+ 
+         self.egui_state.open.store(true, Ordering::Release);
++        self.repaint_notifier.request_repaint();
+ 
+         Ok(SpawnedEditor {
+             handle: EguiEditorHandle {
+@@ -261,10 +285,17 @@ impl<A: NiceEguiApp> Editor for EguiEditor<A> {
+     }
+ 
+     fn size(&self) -> NativeSize<u32> {
+-        NativeSize::from_size(
+-            self.egui_state.logical_size().into(),
+-            self.egui_state.system_scale_factor() as f64,
+-        )
++        let size = NativeSize::from_size(
++            self.egui_state.size(),
++            self.egui_state.system_scale_factor() as f64
++                * self.egui_state.user_scale_factor() as f64,
++        );
++        #[cfg(all(feature = "dpi-trace", target_os = "windows"))]
++        egui_baseview::diagnostics::event(
++            "nice_size_query",
++            format_args!("reported={size:?} state={:?}", self.egui_state),
++        );
++        size
+     }
+ 
+     fn resize_hint(&self) -> nice_plug_core::editor::ResizeHint {
+@@ -334,6 +365,11 @@ impl EditorHandle for EguiEditorHandle {
+         new_size: NativeSize<u32>,
+         window: &Self::Window,
+     ) -> Result<(), Self::Error> {
++        #[cfg(all(feature = "dpi-trace", target_os = "windows"))]
++        egui_baseview::diagnostics::event(
++            "nice_host_size",
++            format_args!("requested={new_size:?} current={:?}", window.size()),
++        );
+         window.resize(new_size)
+     }
+ 
+@@ -342,6 +378,15 @@ impl EditorHandle for EguiEditorHandle {
+         scale_factor: f64,
+         window: &Self::Window,
+     ) -> Result<(), Self::Error> {
++        #[cfg(all(feature = "dpi-trace", target_os = "windows"))]
++        egui_baseview::diagnostics::event(
++            "nice_host_scale",
++            format_args!(
++                "suggested={scale_factor} current={:?} state={:?}",
++                window.size(),
++                self.egui_state
++            ),
++        );
+         window.suggest_fallback_scale_factor(scale_factor)
+     }
+ 
+diff --git a/crates/nice-plug-egui/src/lib.rs b/crates/nice-plug-egui/src/lib.rs
+index 832ddbb5..c806036d 100644
+--- a/crates/nice-plug-egui/src/lib.rs
++++ b/crates/nice-plug-egui/src/lib.rs
+@@ -133,6 +133,15 @@ impl EguiEditorState {
+         self.size.load()
+     }
+ 
++    pub fn set_size(&self, size: impl Into<Size>) {
++        self.size.store(size.into());
++    }
++
++    pub fn set_zoom_factor(&self, zoom_factor: f32) {
++        assert!(zoom_factor > 0.0);
++        self.zoom_factor.store(zoom_factor);
++    }
++
+     fn system_scale_factor(&self) -> f32 {
+         let scale_factor = self.system_scale_factor.load();
+         let fallback_scale_factor = self.fallback_scale_factor.load();
+diff --git a/crates/nice-plug/src/wrapper/vst3/view.rs b/crates/nice-plug/src/wrapper/vst3/view.rs
+index e763f024..d90c7321 100644
+--- a/crates/nice-plug/src/wrapper/vst3/view.rs
++++ b/crates/nice-plug/src/wrapper/vst3/view.rs
+@@ -256,7 +256,6 @@ impl<P: Vst3Plugin> WrapperView<P> {
+             return false;
+         };
+ 
+-        // Don't do anything if the editor is not open, because that would be strange
+         if !inner.is_editor_open.load(Ordering::SeqCst) {
+             return false;
+         }

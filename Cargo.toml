@@ -1,0 +1,55 @@
+[package]
+name = "f0lock"
+version = "0.3.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Fundamental-tracking dynamic equalizer"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[workspace]
+members = ["xtask"]
+resolver = "3"
+
+[features]
+standalone = ["nice-plug/standalone"]
+dpi-trace = ["nice-plug-egui/dpi-trace"]
+
+[[bin]]
+name = "f0lock"
+required-features = ["standalone"]
+
+[dependencies]
+nice-plug = { path = "../f0lock_vendor/nice-plug/crates/nice-plug", features = ["assert_process_allocs", "unsafe_flush_denormals"] }
+egui = { version = "0.37", features = ["default_fonts"] }
+realfft = "3.5"
+pitch-estimate = { path = "../f0lock_vendor/pitch-estimate" }
+
+[target.'cfg(windows)'.dependencies]
+nice-plug-egui = { path = "../f0lock_vendor/nice-plug/crates/nice-plug-egui", default-features = false, features = ["wgpu"] }
+egui-wgpu = { version = "0.37", default-features = false }
+
+[target.'cfg(not(windows))'.dependencies]
+nice-plug-egui = { path = "../f0lock_vendor/nice-plug/crates/nice-plug-egui" }
+
+[dev-dependencies]
+serde_json = "1.0"
+nice-assert-no-alloc = "1.0"
+clap-sys = "0.5"
+libloading = "0.9"
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_UI_HiDpi", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader"] }
+
+[profile.dev]
+opt-level = 1
+
+[patch.crates-io]
+egui-baseview = { path = "vendor/egui-baseview" }
+baseview = { path = "vendor/baseview" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
