@@ -25,6 +25,7 @@ fn detection_menu_changes_global_algorithm_through_host_gestures() {
     for mode in [
         DetectionMode::MpmTracking,
         DetectionMode::Pyin,
+        DetectionMode::SpectralMelody,
         DetectionMode::Mpm,
     ] {
         f.host.events.lock().unwrap().clear();

@@ -21,6 +21,9 @@ pub struct Detector {
     phase: usize,
     filters: [[Svf; 2]; 2],
     lowpass: [Coefficients; 2],
+    configured_mode: DetectionMode,
+    wide_filters: [[Svf; 4]; 2],
+    wide_lowpass: [Coefficients; 4],
     rings: [[f32; WINDOW]; 2],
     position: usize,
     filled: usize,
@@ -40,7 +43,7 @@ impl Detector {
             .with_clarity_threshold(0.0);
 
         Self {
-            mode: DetectionMode::Mpm,
+            mode: DetectionMode::default(),
             target: Target::default(),
             tracking: PitchTracking::new(rate, WINDOW, HOP),
             rate,
@@ -51,6 +54,10 @@ impl Detector {
                 Coefficients::lowpass(sample_rate, 1000.0, 0.5411961),
                 Coefficients::lowpass(sample_rate, 1000.0, 1.306563),
             ],
+            configured_mode: DetectionMode::default(),
+            wide_filters: [[Svf::default(); 4]; 2],
+            wide_lowpass: [0.5097956, 0.6013449, 0.8999762, 2.5629154]
+                .map(|q| Coefficients::lowpass(sample_rate, (rate * 0.3).min(4000.0), q)),
             rings: [[0.0; WINDOW]; 2],
             position: 0,
             filled: 0,
@@ -63,6 +70,7 @@ impl Detector {
     pub fn reset(&mut self) {
         self.tracking.reset();
         self.filters = [[Svf::default(); 2]; 2];
+        self.wide_filters = [[Svf::default(); 4]; 2];
         self.rings = [[0.0; WINDOW]; 2];
         self.position = 0;
         self.filled = 0;
@@ -73,13 +81,30 @@ impl Detector {
     }
 
     pub fn push(&mut self, samples: [f32; 2]) -> bool {
-        // Fourth-order Butterworth at 1 kHz before decimation. Independent
-        // channels prevent cancellation of antiphase stereo material.
+        if self.mode != self.configured_mode {
+            self.reset();
+            self.configured_mode = self.mode;
+        }
+
+        // Periodicity modes retain their 1 kHz path; harmonic salience uses
+        // wider anti-alias filtering. Independent channels avoid cancellation.
         let mut filtered = [0.0; 2];
 
         for ch in 0..2 {
-            let first = self.filters[ch][0].lowpass(samples[ch], self.lowpass[0]);
-            filtered[ch] = self.filters[ch][1].lowpass(first, self.lowpass[1]);
+            if self.mode == DetectionMode::SpectralMelody {
+                let mut value = samples[ch];
+
+                for (filter, coefficients) in
+                    self.wide_filters[ch].iter_mut().zip(self.wide_lowpass)
+                {
+                    value = filter.lowpass(value, coefficients);
+                }
+
+                filtered[ch] = value;
+            } else {
+                let first = self.filters[ch][0].lowpass(samples[ch], self.lowpass[0]);
+                filtered[ch] = self.filters[ch][1].lowpass(first, self.lowpass[1]);
+            }
         }
 
         self.phase += 1;

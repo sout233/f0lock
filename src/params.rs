@@ -127,7 +127,7 @@ impl ProcessingParams {
     fn new(prefix: &str) -> Self {
         let name = |label| format!("{prefix}{label}");
         Self {
-            detection: EnumParam::new(name("Pitch Detection"), DetectionMode::Mpm),
+            detection: EnumParam::new(name("Pitch Detection"), DetectionMode::default()),
             target_mode: EnumParam::new(name("Target Mode"), TargetMode::Auto),
             target_min: target_frequency_param(&name("Target Minimum"), 100.0),
             target_max: target_frequency_param(&name("Target Maximum"), 600.0),

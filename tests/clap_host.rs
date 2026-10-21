@@ -99,7 +99,7 @@ unsafe fn saved_band_state_round_trip(
         for (name, text) in [
             ("Pitch Detection", "pYIN"),
             ("Operating Mode", "Sidechain EQ"),
-            ("Sidechain Pitch Detection", "pYIN"),
+            ("Sidechain Pitch Detection", "F0LOCK Ψ"),
             ("Sidechain F0 gain", "-9 dB"),
             ("Sidechain F0 ratio", "3"),
             ("Sidechain Target Mode", "Range"),

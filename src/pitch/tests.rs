@@ -107,7 +107,11 @@ fn detector_modes_track_tones_harmonics_and_reacquire_after_silence() {
 
 #[test]
 fn enhanced_modes_follow_real_two_octave_note_changes_without_silence() {
-    for mode in [DetectionMode::MpmTracking, DetectionMode::Pyin] {
+    for mode in [
+        DetectionMode::MpmTracking,
+        DetectionMode::Pyin,
+        DetectionMode::SpectralMelody,
+    ] {
         let mut detector = Detector::new(48000.0);
         detector.mode = mode;
 
@@ -150,7 +154,11 @@ fn mode_switches_and_all_backends_are_allocation_free_in_audio_processing() {
 #[test]
 fn enhanced_backends_track_across_sample_rates_and_pitch_limits() {
     for rate in [8000.0, 22050.0, 44100.0, 48000.0, 96000.0, 192000.0] {
-        for mode in [DetectionMode::MpmTracking, DetectionMode::Pyin] {
+        for mode in [
+            DetectionMode::MpmTracking,
+            DetectionMode::Pyin,
+            DetectionMode::SpectralMelody,
+        ] {
             let mut engine = Engine::new(rate);
             let controls = Controls {
                 detection: mode,
@@ -178,7 +186,11 @@ fn enhanced_backends_track_across_sample_rates_and_pitch_limits() {
 
 #[test]
 fn enhanced_backends_recover_a_missing_fundamental_at_startup() {
-    for mode in [DetectionMode::MpmTracking, DetectionMode::Pyin] {
+    for mode in [
+        DetectionMode::MpmTracking,
+        DetectionMode::Pyin,
+        DetectionMode::SpectralMelody,
+    ] {
         let mut detector = Detector::new(48000.0);
         detector.mode = mode;
         let pitches = feed(&mut detector, 0.4, |t| {
@@ -195,7 +207,11 @@ fn enhanced_backends_recover_a_missing_fundamental_at_startup() {
 
 #[test]
 fn enhanced_backends_do_not_lock_to_dc_noise_or_below_gate_audio() {
-    for mode in [DetectionMode::MpmTracking, DetectionMode::Pyin] {
+    for mode in [
+        DetectionMode::MpmTracking,
+        DetectionMode::Pyin,
+        DetectionMode::SpectralMelody,
+    ] {
         for kind in 0..3 {
             let mut engine = Engine::new(48000.0);
             let controls = Controls {

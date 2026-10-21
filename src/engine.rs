@@ -30,7 +30,7 @@ impl Default for Controls {
 
         Self {
             mode: OperatingMode::Track,
-            detection: DetectionMode::Mpm,
+            detection: DetectionMode::default(),
             target: Target::default(),
             bands,
             tracking_ms: 35.0,
@@ -142,8 +142,9 @@ impl Engine {
             OperatingMode::Sidechain => sidechain.unwrap_or([0.0; 2]),
         };
 
+        self.detector.mode = controls.detection;
+
         if self.detector.push(detection_input) {
-            self.detector.mode = controls.detection;
             self.detector.target = controls.target;
             self.estimate = self.detector.analyze(controls.gate_db, controls.clarity);
 

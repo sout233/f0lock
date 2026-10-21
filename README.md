@@ -16,6 +16,19 @@ Sidechain EQ uses the configured gain, with Attack and Release controlling
 engagement. It is not a level-dependent compressor. An absent or silent
 sidechain releases the EQ and displays “Waiting for sidechain pitch”.
 
+## pitch detection
+
+**F0LOCK Ψ** is the default pitch detector for new instances, also selectable
+from the header menu's **Pitch Detection** submenu. It evaluates multiple harmonic candidates and follows
+their trajectories, rather than requiring the complete mixture to be periodic.
+Use **Target → Range / Reference** to identify the voice you want to follow.
+The original MPM, MPM + Tracking and pYIN modes remain available.
+
+This is pitch tracking, not source separation: an exact octave overlap can still
+be ambiguous in Auto. Clarity in this mode measures spectral evidence, so its
+values are not directly comparable with MPM / pYIN. See
+[the algorithm notes](docs/spectral-melody.md) for implementation and validation.
+
 ## building & installing
 
 Install Rust and your platform's native build tools (MSVC on Windows).

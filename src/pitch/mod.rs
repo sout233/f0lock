@@ -1,4 +1,5 @@
 mod candidates;
+mod melody;
 mod target;
 mod tracker;
 
@@ -12,6 +13,9 @@ mod sustain_tests;
 
 #[cfg(test)]
 mod target_tests;
+
+#[cfg(test)]
+mod melody_tests;
 
 use candidates::{Observations, SpectralEvidence, mpm_observations, pyin_observations};
 use nice_plug::prelude::*;
@@ -28,7 +32,6 @@ pub const LOOKAHEAD: usize = 3;
 
 #[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum DetectionMode {
-    #[default]
     #[id = "mpm"]
     #[name = "MPM"]
     Mpm,
@@ -40,16 +43,27 @@ pub enum DetectionMode {
     #[id = "pyin"]
     #[name = "pYIN"]
     Pyin,
+
+    #[default]
+    #[id = "spectral_melody"]
+    #[name = "F0LOCK Ψ"]
+    SpectralMelody,
 }
 
 impl DetectionMode {
-    pub const ALL: [Self; 3] = [Self::Mpm, Self::MpmTracking, Self::Pyin];
+    pub const ALL: [Self; 4] = [
+        Self::Mpm,
+        Self::MpmTracking,
+        Self::Pyin,
+        Self::SpectralMelody,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Mpm => "MPM",
             Self::MpmTracking => "MPM + Tracking",
             Self::Pyin => "pYIN",
+            Self::SpectralMelody => "F0LOCK Ψ",
         }
     }
 }
@@ -59,6 +73,7 @@ pub struct PitchTracking {
     target: Target,
     yin: YinDetector<f32>,
     evidence: SpectralEvidence,
+    melody: melody::MelodyEvidence,
     observations: Observations,
     tracker: Tracker,
 }
@@ -66,10 +81,11 @@ pub struct PitchTracking {
 impl PitchTracking {
     pub fn new(rate: f32, window: usize, hop: usize) -> Self {
         Self {
-            mode: DetectionMode::Mpm,
+            mode: DetectionMode::default(),
             target: Target::default(),
             yin: YinDetector::new(window, window / 2).expect("Invalid pYIN window"),
             evidence: SpectralEvidence::new(window),
+            melody: melody::MelodyEvidence::new(window),
             observations: Observations::default(),
             tracker: Tracker::new(hop as f32 / rate),
         }
@@ -117,6 +133,10 @@ impl PitchTracking {
                     pyin_observations(curve, difference, rate, &mut self.observations, target);
                 }
             }
+            DetectionMode::SpectralMelody => {
+                self.melody
+                    .analyze(frame, rate, target, &mut self.observations);
+            }
         }
 
         target.apply_preference(&mut self.observations);
@@ -135,13 +155,16 @@ impl PitchTracking {
             });
         }
 
-        let lag = if self.mode == DetectionMode::Pyin {
+        let lag = if matches!(
+            self.mode,
+            DetectionMode::Pyin | DetectionMode::SpectralMelody
+        ) {
             LOOKAHEAD
         } else {
             0
         };
         let (frequency, clarity) = self.tracker.process(&self.observations, threshold, lag);
-        // pYIN's delayed decision may predate an automated range change.
+        // A delayed decision may predate an automated range change.
         // Keep its trajectory, but never emit a now-excluded pending pitch.
         if target.mode != TargetMode::Auto && !target.allows(frequency) {
             (0.0, clarity)

@@ -10,6 +10,7 @@ fn mpm_tracks_tones_across_sample_rates() {
     for rate in [8000.0, 22050.0, 44100.0, 48000.0, 96000.0, 192000.0] {
         for hz in [51.0, 55.0, 110.0, 220.0, 440.0, 880.0, 990.0] {
             let mut detector = Detector::new(rate);
+            detector.mode = crate::pitch::DetectionMode::Mpm;
             let mut last = Default::default();
 
             for i in 0..(rate * 0.3) as usize {
@@ -217,6 +218,25 @@ fn default_plugin_exports_unique_parameter_ids() {
     ids.dedup();
 
     assert_eq!(ids.len(), 124);
+}
+
+#[test]
+fn psi_is_the_default_algorithm_in_both_parameter_banks_and_dsp() {
+    use crate::{mode::OperatingMode, pitch::DetectionMode};
+
+    let params = crate::params::F0Params::default();
+
+    for mode in [OperatingMode::Track, OperatingMode::Sidechain] {
+        assert_eq!(
+            params.for_mode(mode).detection.value(),
+            DetectionMode::SpectralMelody
+        );
+    }
+
+    assert_eq!(DetectionMode::default(), DetectionMode::SpectralMelody);
+    assert_eq!(Controls::default().detection, DetectionMode::SpectralMelody);
+    assert_eq!(Detector::new(48000.0).mode, DetectionMode::SpectralMelody);
+    assert_eq!(DetectionMode::default().label(), "F0LOCK Ψ");
 }
 
 #[test]

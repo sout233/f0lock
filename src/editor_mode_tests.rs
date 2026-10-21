@@ -39,7 +39,7 @@ fn header_mode_switch_restores_independent_point_and_global_parameters() {
     assert_eq!(f.editor.params.active().attack.value(), 10.0);
     assert_eq!(
         f.editor.params.active().detection.value(),
-        DetectionMode::Mpm
+        DetectionMode::SpectralMelody
     );
 
     f.click_text("Track EQ");
