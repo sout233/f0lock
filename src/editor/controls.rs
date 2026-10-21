@@ -268,10 +268,17 @@ impl F0Editor {
                     let lit = supported && band.dynamics.enabled.value();
                     let lamp = at(383.0, 373.0);
                     let painter = ui.painter();
+                    let (glow, core) = knob::light_colors(accent);
 
                     if lit {
-                        painter.circle_filled(lamp, 9.0, accent.gamma_multiply(0.07));
-                        painter.circle_filled(lamp, 7.5, accent.gamma_multiply(0.14));
+                        for i in (1..=10).rev() {
+                            let t = i as f32 / 10.0;
+                            painter.circle_filled(
+                                lamp,
+                                6.5 + 10.0 * t,
+                                glow.gamma_multiply(0.004 + 0.10 * (1.0 - t).powi(2)),
+                            );
+                        }
                     }
                     painter.circle_filled(lamp + Vec2::new(0.0, 0.7), 6.5, Color32::from_gray(130));
                     painter.circle_filled(lamp, 6.0, Color32::from_gray(57));
@@ -279,7 +286,7 @@ impl F0Editor {
                     painter.circle_filled(
                         lamp,
                         4.3,
-                        if lit { accent } else { Color32::from_gray(110) },
+                        if lit { core } else { Color32::from_gray(110) },
                     );
                     painter.text(
                         at(397.0, 373.0),

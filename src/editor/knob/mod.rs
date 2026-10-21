@@ -5,6 +5,7 @@ use std::f32::consts::{PI, TAU};
 pub const RED: Color32 = Color32::from_rgb(201, 55, 65);
 const INK: Color32 = Color32::from_rgb(58, 59, 60);
 
+mod glow;
 mod input;
 
 #[cfg(test)]
@@ -87,6 +88,14 @@ fn mix(a: Color32, b: Color32, amount: f32) -> Color32 {
         channel(a.g(), b.g()),
         channel(a.b(), b.b()),
     )
+}
+
+pub(super) fn light_colors(accent: Color32) -> (Color32, Color32) {
+    let mut luminous = egui::ecolor::Hsva::from(accent);
+    luminous.v = 1.0;
+    luminous.s = (luminous.s * 1.1).min(1.0);
+    let glow = Color32::from(luminous);
+    (glow, mix(glow, Color32::WHITE, 0.22))
 }
 
 pub fn gradient_rect(p: &egui::Painter, rect: Rect, top: Color32, bottom: Color32) {
@@ -344,17 +353,18 @@ pub fn knob(
         0.0
     };
 
+    let (glow, core) = light_colors(accent);
+
     if press > 0.001 {
-        for (width, opacity) in [(15.0, 0.035), (10.0, 0.07), (6.0, 0.15)] {
-            arc(
-                p,
-                center,
-                radius + 7.0 * scale,
-                start,
-                value,
-                Stroke::new(width * scale, accent.gamma_multiply(press * opacity)),
-            );
-        }
+        glow::arc(
+            p,
+            center,
+            radius + 7.0 * scale,
+            [start, value],
+            scale,
+            glow,
+            press,
+        );
     }
     arc(
         p,
@@ -362,7 +372,7 @@ pub fn knob(
         radius + 7.0 * scale,
         start,
         value,
-        Stroke::new(3.0 * scale, mix(accent, Color32::WHITE, press * 0.42)),
+        Stroke::new(3.0 * scale, mix(accent, core, press)),
     );
 
     let metal = |gray| {

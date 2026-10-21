@@ -1,6 +1,60 @@
 use super::super::*;
 
 #[test]
+fn glow_fades_beyond_both_endpoints_in_either_direction() {
+    for range in [[0.0, 0.5], [0.5, 0.0]] {
+        let ctx = egui::Context::default();
+        let center = Pos2::new(100.0, 100.0);
+        let mut output = ctx.run_ui(Default::default(), |ui| {
+            glow::arc(ui.painter(), center, 40.0, range, 1.0, RED, 1.0);
+        });
+        output.textures_delta.clear();
+        let primitives = ctx.tessellate(output.shapes, output.pixels_per_point);
+        let alpha_at = |point: Pos2| {
+            let mut alpha = 0.0;
+            for primitive in &primitives {
+                let egui::epaint::Primitive::Mesh(mesh) = &primitive.primitive else {
+                    panic!("Unexpected glow paint callback");
+                };
+                for indices in mesh.indices.chunks_exact(3) {
+                    let [a, b, c] =
+                        [indices[0], indices[1], indices[2]].map(|i| mesh.vertices[i as usize]);
+                    let cross = |a: Vec2, b: Vec2| a.x * b.y - a.y * b.x;
+                    let area = cross(b.pos - a.pos, c.pos - a.pos);
+                    if area == 0.0 {
+                        continue;
+                    }
+                    let wb = cross(point - a.pos, c.pos - a.pos) / area;
+                    let wc = cross(b.pos - a.pos, point - a.pos) / area;
+                    let wa = 1.0 - wb - wc;
+                    if wa >= 0.0 && wb >= 0.0 && wc >= 0.0 {
+                        let coverage = (wa * f32::from(a.color.a())
+                            + wb * f32::from(b.color.a())
+                            + wc * f32::from(c.color.a()))
+                            / 255.0;
+                        alpha += (1.0 - alpha) * coverage;
+                    }
+                }
+            }
+            alpha
+        };
+        for (angle, direction) in [(PI * 0.75, -1.0), (PI * 1.5, 1.0)] {
+            let normal = Vec2::angled(angle);
+            let tangent = Vec2::new(-normal.y, normal.x) * direction;
+            let end = center + normal * 40.37;
+            let near = alpha_at(end + tangent * 3.1);
+            let far = alpha_at(end + tangent * 9.3);
+            let outside = alpha_at(end + tangent * 23.0);
+            assert!(
+                near > far && far > 0.0,
+                "Glow endpoint is cut off: {near}, {far}"
+            );
+            assert_eq!(outside, 0.0);
+        }
+    }
+}
+
+#[test]
 fn disc_edges_have_partial_pixel_coverage_at_supported_scales() {
     for scale in [0.75, 1.0, 1.25, 1.5, 2.0] {
         let ctx = egui::Context::default();
