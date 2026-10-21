@@ -63,8 +63,10 @@ impl F0Editor {
                         (12.0 * (frequency / target.reference).log2())
                             .abs()
                             .clamp(1.0, 24.0)
+                    } else if edge == "minimum" {
+                        frequency.min(self.params.active().target_max.value())
                     } else {
-                        frequency
+                        frequency.max(self.params.active().target_min.value())
                     };
                     setter.set_parameter(param, value);
                 }
@@ -149,6 +151,7 @@ impl F0Editor {
                 );
                 egui::Popup::menu(&button)
                     .align(egui::emath::RectAlign::BOTTOM_END)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                     .width(260.0)
                     .show(|ui| {
                         ui.horizontal(|ui| {
@@ -185,7 +188,19 @@ impl F0Editor {
 
                                 for (param, label) in fields {
                                     ui.label(label);
-                                    target_value(ui, param, &setter);
+                                    let mut bounds =
+                                        param.preview_plain(0.0)..=param.preview_plain(1.0);
+
+                                    if mode == TargetMode::Range {
+                                        let bank = self.params.active();
+                                        bounds = if label == "Minimum" {
+                                            MIN_HZ..=bank.target_max.value()
+                                        } else {
+                                            bank.target_min.value()..=MAX_HZ
+                                        };
+                                    }
+
+                                    target_value(ui, param, &setter, bounds);
                                     ui.end_row();
                                 }
                             });
@@ -202,11 +217,17 @@ impl F0Editor {
     }
 }
 
-fn target_value(ui: &mut egui::Ui, param: &FloatParam, setter: &ParamSetter<'_>) {
+fn target_value(
+    ui: &mut egui::Ui,
+    param: &FloatParam,
+    setter: &ParamSetter<'_>,
+    bounds: std::ops::RangeInclusive<f32>,
+) {
     let mut value = param.value();
     let response = ui.add(
         egui::DragValue::new(&mut value)
-            .range(param.preview_plain(0.0)..=param.preview_plain(1.0))
+            .range(bounds)
+            .clamp_existing_to_range(false)
             .speed(if param.unit() == " Hz" { 1.0 } else { 0.1 })
             .max_decimals(2)
             .suffix(param.unit()),

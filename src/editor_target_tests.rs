@@ -75,6 +75,103 @@ fn target_modes_and_spectrum_handles_use_host_gestures_without_editing_eq_points
 }
 
 #[test]
+fn range_handles_stop_at_the_opposite_boundary() {
+    for (start, end, expected_min, expected_max) in
+        [(100.0, 900.0, 600.0, 600.0), (600.0, 60.0, 100.0, 100.0)]
+    {
+        let mut f = Fixture::new();
+        let setter = f.editor.gui.as_ref().unwrap().param_setter();
+        set_value(
+            &setter,
+            &f.editor.params.active().target_mode,
+            TargetMode::Range,
+        );
+        f.frame(vec![]);
+        f.host.events.lock().unwrap().clear();
+
+        let x = |hz: f32| 57.0 + (hz / 20.0).ln() / 1000.0_f32.ln() * 786.0;
+        drag(&mut f, Pos2::new(x(start), 220.0), Pos2::new(x(end), 220.0));
+
+        let bank = f.editor.params.active();
+        assert!((bank.target_min.value() - expected_min).abs() < 0.1);
+        assert!((bank.target_max.value() - expected_max).abs() < 0.1);
+    }
+}
+
+#[test]
+fn range_numeric_input_stops_at_the_opposite_boundary() {
+    for (initial, input, expected_min, expected_max) in
+        [("100", "900", 600.0, 600.0), ("600", "60", 100.0, 100.0)]
+    {
+        let mut f = Fixture::new();
+        f.click_text("Target: Auto");
+        f.click_text("Range");
+        f.frame(vec![]);
+        if !f.shapes.iter().any(|shape| {
+            matches!(&shape.shape,
+            egui::Shape::Text(t) if t.galley.job.text == "Minimum")
+        }) {
+            f.click_text("Target: Range");
+            f.frame(vec![]);
+        }
+
+        let label = if initial == "100" {
+            "Minimum"
+        } else {
+            "Maximum"
+        };
+        let row_y = f
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(t) if t.galley.job.text == label => {
+                    Some(shape.shape.visual_bounding_rect().center().y)
+                }
+                _ => None,
+            })
+            .expect("Range field label missing");
+
+        let position = f
+            .shapes
+            .iter()
+            .rev()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(t)
+                    if t.galley.job.text.starts_with(initial)
+                        && (shape.shape.visual_bounding_rect().center().y - row_y).abs() < 5.0 =>
+                {
+                    Some(shape.shape.visual_bounding_rect().center())
+                }
+                _ => None,
+            })
+            .expect("Range numeric input missing");
+        f.click(position, egui::PointerButton::Primary);
+        f.frame(vec![]);
+        f.frame(vec![egui::Event::Text(input.to_owned())]);
+        f.frame(vec![egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        }]);
+        f.frame(vec![]);
+
+        let bank = f.editor.params.active();
+        assert!(
+            (bank.target_min.value() - expected_min).abs() < 0.1,
+            "minimum: {}",
+            bank.target_min.value()
+        );
+        assert!(
+            (bank.target_max.value() - expected_max).abs() < 0.1,
+            "maximum: {}",
+            bank.target_max.value()
+        );
+    }
+}
+
+#[test]
 fn invalid_range_is_visible_even_when_the_target_menu_is_closed() {
     let mut f = Fixture::new();
     let setter = f.editor.gui.as_ref().unwrap().param_setter();
