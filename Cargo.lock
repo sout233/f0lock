@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "f0lock"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap-sys",
  "egui",
