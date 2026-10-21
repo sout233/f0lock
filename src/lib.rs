@@ -2,27 +2,14 @@ mod analyzer;
 mod band;
 mod detector;
 mod dynamics;
-#[cfg(test)]
-mod dynamics_tests;
 mod editor;
 mod engine;
 mod filter;
 mod lookahead;
 mod mode;
-#[cfg(test)]
-mod multiband_tests;
-
-#[cfg(test)]
-mod envelope_tests;
-#[cfg(test)]
-mod lookahead_tests;
 mod params;
 mod pitch;
 mod realtime;
-#[cfg(test)]
-mod sidechain_tests;
-#[cfg(test)]
-mod spectrum_tests;
 #[cfg(test)]
 mod tests;
 

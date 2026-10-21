@@ -142,6 +142,6 @@ at its clean attack and then lose all EQ processing despite high periodicity.
 The decoder now keeps paired voiced/unvoiced states for every pitch bin,
 applying the same pitch transition kernel to both. This corrects the model
 without changing Gate, Clarity, or adding a hold timer. The regression command
-is `cargo test --lib pitch::sustain_tests -- --nocapture`.
+is `cargo test --lib pitch::tests::sustain -- --nocapture`.
 A deterministic 220 Hz tone with noise is compared across all three modes;
 the test checks continuous voicing, band engagement, and measured audio gain.

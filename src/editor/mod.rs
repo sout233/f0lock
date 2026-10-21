@@ -7,28 +7,16 @@ use nice_plug::{
 use nice_plug_egui::NiceEguiApp;
 use std::{sync::Arc, time::Duration};
 
-#[path = "controls.rs"]
 mod controls;
-#[path = "credits.rs"]
 mod credits;
-#[path = "knob.rs"]
 mod knob;
-#[path = "mode_ui.rs"]
-mod mode_ui;
-#[path = "point_tabs.rs"]
 mod point_tabs;
-#[path = "settings.rs"]
+mod processing_bar;
 mod settings;
-#[path = "spectrum.rs"]
 mod spectrum;
-#[path = "target_ui.rs"]
-mod target_ui;
+mod target;
 use knob::{RED, gradient_rect};
 #[cfg(test)]
-#[path = "editor_points_tests.rs"]
-mod point_tests;
-#[cfg(test)]
-#[path = "editor_tests.rs"]
 mod tests;
 
 const TEXT: Color32 = Color32::from_rgb(213, 214, 214);
@@ -229,7 +217,7 @@ pub(crate) fn configure_style(ctx: &egui::Context) {
     fonts.font_data.insert(
         GLOBAL_FONT.to_owned(),
         Arc::new(egui::FontData::from_static(include_bytes!(
-            "../assets/fonts/Ubuntu-Bold.ttf"
+            "../../assets/fonts/Ubuntu-Bold.ttf"
         ))),
     );
     fonts.families.insert(
@@ -239,7 +227,7 @@ pub(crate) fn configure_style(ctx: &egui::Context) {
     fonts.font_data.insert(
         "credits-cjk".into(),
         Arc::new(egui::FontData::from_static(include_bytes!(
-            "../assets/fonts/NotoSansSC-Credits.ttf"
+            "../../assets/fonts/NotoSansSC-Credits.ttf"
         ))),
     );
     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {

@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 #[test]
 fn disc_edges_have_partial_pixel_coverage_at_supported_scales() {

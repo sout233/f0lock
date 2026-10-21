@@ -58,7 +58,7 @@ impl F0Editor {
 
                 let image = self.credits_image.get_or_insert_with(|| {
                     let mut decoder = png::Decoder::new(Cursor::new(include_bytes!(
-                        "../assets/credits/bashunqian.png"
+                        "../../assets/credits/bashunqian.png"
                     )));
                     decoder.set_transformations(
                         png::Transformations::EXPAND | png::Transformations::STRIP_16,

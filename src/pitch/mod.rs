@@ -8,18 +8,6 @@ pub use target::{Target, TargetMode};
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-mod sustain_tests;
-
-#[cfg(test)]
-mod target_tests;
-
-#[cfg(test)]
-mod melody_tests;
-
-#[cfg(test)]
-mod high_pitch_tests;
-
 use candidates::{Observations, SpectralEvidence, mpm_observations, pyin_observations};
 use nice_plug::prelude::*;
 use pitch_estimate::{McLeodDetector, YinDetector};
