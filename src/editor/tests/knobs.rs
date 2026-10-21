@@ -160,3 +160,21 @@ fn all_knob_readouts_use_two_decimal_places() {
         );
     }
 }
+#[test]
+fn infinite_release_button_uses_host_gestures_and_preserves_the_release_time() {
+    let mut f = Fixture::new();
+    f.host.events.lock().unwrap().clear();
+    f.click(Pos2::new(596.0, 589.0), egui::PointerButton::Primary);
+    assert!(f.editor.params.active().infinite_release.value());
+    assert!(!f.editor.params.sidechain.infinite_release.value());
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+
+    f.click(Pos2::new(545.0, 642.0), egui::PointerButton::Secondary);
+    f.frame(vec![]);
+    assert!(!f.shapes.iter().any(|shape| matches!(&shape.shape,
+        egui::Shape::Text(t) if t.galley.job.text == "Apply")));
+
+    f.click(Pos2::new(596.0, 589.0), egui::PointerButton::Primary);
+    assert!(!f.editor.params.active().infinite_release.value());
+    assert_eq!(f.editor.params.active().release.value(), 100.0);
+}

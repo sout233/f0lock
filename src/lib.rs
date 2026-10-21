@@ -250,6 +250,7 @@ impl Plugin for F0Lock {
                 tracking_ms: params.tracking.value(),
                 attack_ms: params.attack.value(),
                 release_ms: params.release.value(),
+                infinite_release: params.infinite_release.value(),
                 clarity: params.clarity.value(),
                 gate_db: params.gate.value(),
                 mix: params.mix.value() * 0.01,

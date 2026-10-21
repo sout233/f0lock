@@ -6,6 +6,97 @@ use crate::{
 use std::f32::consts::TAU;
 
 #[test]
+fn infinite_release_keeps_low_cut_after_pitch_loss_and_resumes_normal_release_when_disabled() {
+    use crate::{filter::CutSlope, lookahead::LookaheadTime, mode::OperatingMode};
+
+    for mode in [OperatingMode::Track, OperatingMode::Sidechain] {
+        for lookahead in [false, true] {
+            let mut engine = Engine::new(48000.0);
+            engine.configure_lookahead(lookahead, LookaheadTime::Ms150);
+            let mut controls = Controls {
+                mode,
+                infinite_release: true,
+                ..Controls::default()
+            };
+            controls.bands[0].kind = FilterKind::Highpass;
+            controls.bands[0].slope = CutSlope::Db24;
+            controls.bands[0].q = std::f32::consts::FRAC_1_SQRT_2;
+
+            // No detection yet: infinite release must not enable a placeholder EQ.
+            for _ in 0..12000 {
+                engine.process_with_sidechain([0.0; 2], Some([0.0; 2]), controls);
+            }
+            assert_eq!(engine.bands[0].wet, 0.0);
+
+            for i in 0..48000 {
+                let x = 0.02 * (TAU * 440.0 * i as f32 / 48000.0).sin();
+                engine.process_with_sidechain([x; 2], Some([x; 2]), controls);
+            }
+            assert_eq!(engine.bands[0].wet, 1.0);
+            controls.gate_db = -20.0;
+
+            let mut input_power = 0.0_f64;
+            let mut output_power = 0.0_f64;
+            for i in 0..48000 {
+                let x = 0.005 * (TAU * 110.0 * i as f32 / 48000.0).sin();
+                let y = engine.process_with_sidechain([x; 2], Some([0.0; 2]), controls);
+                if i > 24000 {
+                    input_power += f64::from(x).powi(2);
+                    output_power += f64::from(y[0]).powi(2);
+                }
+            }
+            assert_eq!(engine.estimate.frequency, 0.0);
+            assert_eq!(engine.bands[0].wet, 1.0);
+            assert!((engine.frequency - 440.0).abs() < 1.0);
+            assert!(
+                10.0 * (output_power / input_power).log10() < -40.0,
+                "Held Low Cut must still process audio: {mode:?}, lookahead={lookahead}"
+            );
+
+            // A new note continues tracking instead of freezing the pitch forever.
+            controls.gate_db = -55.0;
+            for i in 0..48000 {
+                let x = 0.02 * (TAU * 660.0 * i as f32 / 48000.0).sin();
+                engine.process_with_sidechain([x; 2], Some([x; 2]), controls);
+            }
+            assert!((engine.frequency - 660.0).abs() < 1.0);
+
+            controls.gate_db = -20.0;
+            controls.infinite_release = false;
+            for _ in 0..24000 {
+                engine.process_with_sidechain([0.001; 2], Some([0.0; 2]), controls);
+            }
+            assert_eq!(engine.bands[0].wet, 0.0);
+        }
+    }
+}
+
+#[test]
+fn infinite_release_does_not_prevent_explicit_band_disable_delete_or_reset() {
+    for action in 0..3 {
+        let mut engine = Engine::new(48000.0);
+        let mut controls = Controls {
+            infinite_release: true,
+            ..Controls::default()
+        };
+        for i in 0..24000 {
+            let x = 0.1 * (TAU * 220.0 * i as f32 / 48000.0).sin();
+            engine.process([x; 2], controls);
+        }
+        assert_eq!(engine.bands[0].wet, 1.0);
+        match action {
+            0 => controls.bands[0].exists = false,
+            1 => controls.bands[0].enabled = false,
+            _ => engine.reset(),
+        }
+        for _ in 0..12000 {
+            engine.process([0.0; 2], controls);
+        }
+        assert_eq!(engine.bands[0].wet, 0.0);
+    }
+}
+
+#[test]
 fn every_filter_uses_attack_and_release_for_its_processing_amount() {
     for rate in [8000.0, 48000.0, 192000.0] {
         for kind in FilterKind::ALL {

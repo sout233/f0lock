@@ -184,7 +184,7 @@ impl F0Editor {
                 545.0,
                 642.0,
                 false,
-                true,
+                !self.params.active().infinite_release.value(),
                 GLOBAL_ACCENT,
             ),
             (
@@ -214,6 +214,33 @@ impl F0Editor {
                 ui.visuals_mut().selection.stroke = Stroke::new(1.0, color);
                 knob::knob(ui, param, &setter, at(x, y), 35.0 * 0.85, label, bipolar);
             });
+        }
+
+        let infinite_release = &self.params.active().infinite_release;
+        let center = at(596.0, 589.0);
+        let response = ui
+            .interact(
+                Rect::from_center_size(center, Vec2::splat(24.0)),
+                ui.make_persistent_id("infinite-release"),
+                Sense::click(),
+            )
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text("Infinite Release: hold EQ when pitch is lost");
+        let color = if infinite_release.value() {
+            self.accent()
+        } else {
+            Color32::from_gray(if response.hovered() { 65 } else { 112 })
+        };
+        p.circle_stroke(center, 10.0, Stroke::new(1.0, color.gamma_multiply(0.65)));
+        let points = (0..=64)
+            .map(|i| {
+                let t = std::f32::consts::TAU * i as f32 / 64.0;
+                center + Vec2::new(6.2 * t.sin(), 3.0 * (2.0 * t).sin())
+            })
+            .collect();
+        p.add(egui::Shape::line(points, Stroke::new(1.5, color)));
+        if response.clicked() {
+            set_value(&setter, infinite_release, !infinite_release.value());
         }
 
         let accent = self.accent();

@@ -106,6 +106,9 @@ pub struct ProcessingParams {
     #[id = "release"]
     pub release: FloatParam,
 
+    #[id = "infinite_release"]
+    pub infinite_release: BoolParam,
+
     #[id = "clarity"]
     pub clarity: FloatParam,
 
@@ -214,6 +217,8 @@ impl ProcessingParams {
                 },
             )
             .with_unit(" ms"),
+
+            infinite_release: BoolParam::new(name("Infinite Release"), false),
 
             clarity: FloatParam::new(
                 name("Clarity"),

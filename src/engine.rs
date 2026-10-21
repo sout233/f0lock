@@ -16,6 +16,7 @@ pub struct Controls {
     pub tracking_ms: f32,
     pub attack_ms: f32,
     pub release_ms: f32,
+    pub infinite_release: bool,
     pub clarity: f32,
     pub gate_db: f32,
     pub mix: f32,
@@ -37,6 +38,7 @@ impl Default for Controls {
             tracking_ms: 35.0,
             attack_ms: 10.0,
             release_ms: 100.0,
+            infinite_release: false,
             clarity: 0.85,
             gate_db: -55.0,
             mix: 1.0,
@@ -276,6 +278,12 @@ impl Engine {
         let mut wet = input;
 
         for (band, control) in self.bands.iter_mut().zip(controls.bands) {
+            let mut envelope_steps = self.envelope_steps;
+            if controls.infinite_release && control.exists && control.enabled {
+                // Hold the existing amount on pitch loss; explicit band removal
+                // and bypass still use their normal release paths.
+                envelope_steps[1] = 0.0;
+            }
             wet = band.process(
                 wet,
                 frame.source,
@@ -284,7 +292,7 @@ impl Engine {
                 self.source_started,
                 self.sample_rate,
                 self.control_alpha,
-                self.envelope_steps,
+                envelope_steps,
             );
         }
 

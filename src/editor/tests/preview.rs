@@ -132,7 +132,13 @@ fn editor_renders_real_signal_and_exports_meshes() {
             None,
         ),
         (19.0, vec![], Some("cut-menu")),
+        (20.0, vec![], Some("infinite-release")),
     ] {
+        if time == 20.0 {
+            egui::Popup::close_all(&ctx);
+            let setter = editor.gui.as_ref().unwrap().param_setter();
+            set_value(&setter, &params.active().infinite_release, true);
+        }
         if time == 16.0 || time == 17.0 {
             let setter = editor.gui.as_ref().unwrap().param_setter();
             set_value(

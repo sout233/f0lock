@@ -117,6 +117,8 @@ unsafe fn saved_band_state_round_trip(
             ("Target Tolerance", "7 st"),
             ("Attack", "25 ms"),
             ("Release", "250 ms"),
+            ("Infinite Release", "On"),
+            ("Sidechain Infinite Release", "On"),
             ("Band 2 exists", "On"),
             ("Band 2 ratio", "2.5"),
             ("Band 2 type", "High Shelf"),
@@ -436,7 +438,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         assert_eq!(sidechain_info.channel_count, 2);
         assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 222);
+        assert_eq!(count, 224);
         let mut gain_id = None;
         let mut bypass_id = None;
 
