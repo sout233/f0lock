@@ -2,7 +2,7 @@
 
 fundamental-tracking dynamic EQ built on nice-plug
 
-![interface](docs/screenshot.png)
+![interface](docs/screenshot_new.png)
 
 
 ## building & installing
