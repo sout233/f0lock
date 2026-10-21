@@ -8,7 +8,7 @@ impl F0Editor {
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
             .collapsible(false)
             .resizable(false)
-            .default_width(330.0)
+            .default_width(420.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.about_credits, false, "About");
@@ -19,14 +19,42 @@ impl F0Editor {
 
                 if !self.about_credits {
                     ui.label(egui::RichText::new("fl0lock...dev by sout").size(16.0));
-                    ui.add_space(8.0);
+                    ui.add_space(12.0);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 18.0;
+                        ui.hyperlink_to("GitHub", "https://github.com/sout233");
+                        ui.hyperlink_to("Bilibili", "https://space.bilibili.com/230275560");
+                        ui.hyperlink_to("X", "https://x.com/sout_Nantang");
+                    });
+                    ui.add_space(12.0);
                     return;
                 }
 
-                ui.label("Icewatermelon233（谭荣熙竣）");
-                ui.add_space(8.0);
-                ui.label("网友八顺千");
-                ui.add_space(6.0);
+                for (name, link) in [
+                    (
+                        "Icewatermelon233（谭荣熙竣）",
+                        Some("https://space.bilibili.com/393632577"),
+                    ),
+                    ("UnD3ath", Some("https://space.bilibili.com/224632474")),
+                    ("荔枝fliz", None),
+                    ("网友八顺千", None),
+                ] {
+                    ui.horizontal(|ui| {
+                        ui.set_min_height(22.0);
+                        ui.label(egui::RichText::new(name).size(14.0));
+                        if let Some(link) = link {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.hyperlink_to("Bilibili", link);
+                                },
+                            );
+                        }
+                    });
+                    ui.add_space(6.0);
+                }
+                ui.separator();
+                ui.add_space(10.0);
 
                 let image = self.credits_image.get_or_insert_with(|| {
                     let mut decoder = png::Decoder::new(Cursor::new(include_bytes!(
@@ -56,9 +84,11 @@ impl F0Editor {
                     };
                     ctx.load_texture("bashunqian-credits", image, egui::TextureOptions::LINEAR)
                 });
-                let width = ui.available_width().min(330.0);
+                let width = ui.available_width().min(300.0);
                 let size = image.size_vec2();
-                ui.add(egui::Image::new(&*image).fit_to_exact_size(size * (width / size.x)));
+                ui.vertical_centered(|ui| {
+                    ui.add(egui::Image::new(&*image).fit_to_exact_size(size * (width / size.x)));
+                });
                 ui.add_space(8.0);
             });
     }

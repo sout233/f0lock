@@ -7,6 +7,9 @@ mod knob_tests;
 #[path = "editor_dynamics_tests.rs"]
 mod dynamics_tests;
 
+#[path = "editor_about_tests.rs"]
+mod about_tests;
+
 #[path = "editor_spectrum_tests.rs"]
 mod spectrum_tests;
 
@@ -48,6 +51,7 @@ struct Fixture {
     host: Arc<RecordingHost>,
     shapes: Vec<egui::epaint::ClippedShape>,
     viewport_commands: Vec<egui::ViewportCommand>,
+    opened_urls: Vec<String>,
     time: f64,
 }
 
@@ -76,6 +80,7 @@ impl Fixture {
             host,
             shapes: Vec::new(),
             viewport_commands: Vec::new(),
+            opened_urls: Vec::new(),
             time: 0.0,
         };
 
@@ -95,6 +100,16 @@ impl Fixture {
             |ui| self.editor.draw(ui),
         );
         output.textures_delta.clear();
+        self.opened_urls.extend(
+            output
+                .platform_output
+                .commands
+                .iter()
+                .filter_map(|command| match command {
+                    egui::OutputCommand::OpenUrl(url) => Some(url.url.clone()),
+                    _ => None,
+                }),
+        );
         self.viewport_commands = output.viewport_output[&egui::ViewportId::ROOT]
             .commands
             .clone();
@@ -594,7 +609,12 @@ fn header_menu_opens_audio_settings_and_about() {
         egui::Shape::Text(t) if t.galley.job.text == "fl0lock...dev by sout")));
     f.click_text("鸣谢");
     f.frame(vec![]);
-    for name in ["Icewatermelon233（谭荣熙竣）", "网友八顺千"] {
+    for name in [
+        "Icewatermelon233（谭荣熙竣）",
+        "UnD3ath",
+        "荔枝fliz",
+        "网友八顺千",
+    ] {
         assert!(f.shapes.iter().any(|s| matches!(&s.shape,
             egui::Shape::Text(t) if t.galley.job.text == name)));
     }

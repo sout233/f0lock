@@ -144,11 +144,17 @@ fn editor_renders_real_signal_and_exports_meshes() {
         (9.3, vec![], Some("numeric-entry")),
         (10.0, vec![], Some("target-range")),
         (11.0, vec![], Some("target-reference")),
+        (11.5, vec![], None),
+        (11.7, vec![], Some("about")),
         (12.0, vec![], None),
         (13.0, vec![], Some("credits")),
         (14.0, vec![], None),
         (15.0, vec![], Some("dynamics")),
     ] {
+        if time == 11.5 {
+            editor.about_open = true;
+            editor.about_credits = false;
+        }
         if time == 14.0 {
             editor.about_open = false;
             let setter = editor.gui.as_ref().unwrap().param_setter();
