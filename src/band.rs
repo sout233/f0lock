@@ -1,10 +1,12 @@
+use crate::dynamics::{DynamicControl, Dynamics};
 use crate::filter::{Coefficients, FilterKind, Svf};
 
 pub const BAND_COUNT: usize = 8;
-pub const BAND_VALUES: usize = 9;
+pub const BAND_VALUES: usize = 10;
 
 #[derive(Clone, Copy, Debug)]
 pub struct BandControl {
+    pub dynamics: DynamicControl,
     pub exists: bool,
     pub enabled: bool,
     pub ratio: f32,
@@ -16,6 +18,7 @@ pub struct BandControl {
 impl Default for BandControl {
     fn default() -> Self {
         Self {
+            dynamics: DynamicControl::default(),
             exists: false,
             enabled: true,
             ratio: 1.0,
@@ -27,6 +30,7 @@ impl Default for BandControl {
 }
 
 pub struct Band {
+    dynamics: Dynamics,
     filters: [Svf; 2],
     pub coefficients: Coefficients,
     pub frequency: f32,
@@ -39,6 +43,7 @@ pub struct Band {
 impl Band {
     pub fn new(rate: f32) -> Self {
         Self {
+            dynamics: Dynamics::new(rate),
             filters: [Svf::default(); 2],
             coefficients: Coefficients::bell(rate, 150.0, 3.0, 0.0),
             frequency: 150.0,
@@ -52,6 +57,7 @@ impl Band {
     pub fn process(
         &mut self,
         mut input: [f32; 2],
+        source: [f32; 2],
         control: BandControl,
         f0: f32,
         voiced: bool,
@@ -63,11 +69,20 @@ impl Band {
 
         if self.wet == 0.0 && !active {
             self.gain = 0.0;
+            self.dynamics.reset();
             return input;
         }
 
         let target_frequency = (f0 * control.ratio).min(rate * 0.49);
-        let target_gain = control.gain;
+        let dynamic_gain = self.dynamics.process(
+            source,
+            control.dynamics,
+            rate,
+            target_frequency,
+            control.q,
+            control.kind,
+        );
+        let target_gain = control.gain + dynamic_gain;
 
         if self.wet == 0.0 {
             self.log_ratio = f64::from(control.ratio).ln();
@@ -115,6 +130,7 @@ impl Band {
             self.coefficients.mix[0],
             self.coefficients.mix[1],
             self.coefficients.mix[2],
+            self.dynamics.gain,
         ]
     }
 }

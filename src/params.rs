@@ -1,5 +1,6 @@
 use crate::{
     band::{BAND_COUNT, BandControl},
+    dynamics::DynamicParams,
     filter::FilterKind,
     lookahead::LookaheadTime,
     mode::OperatingMode,
@@ -131,6 +132,9 @@ pub struct ProcessingParams {
 
     #[nested(array, group = "Additional band")]
     pub additional: [BandParams; BAND_COUNT - 1],
+
+    #[nested(array, group = "Dynamics")]
+    pub dynamics: [DynamicParams; BAND_COUNT],
 }
 
 impl ProcessingParams {
@@ -138,6 +142,7 @@ impl ProcessingParams {
         let name = |label| format!("{prefix}{label}");
         Self {
             detection: EnumParam::new(name("Pitch Detection"), DetectionMode::default()),
+            dynamics: std::array::from_fn(|i| DynamicParams::new(i + 1, prefix)),
             target_mode: EnumParam::new(name("Target Mode"), TargetMode::Auto),
             target_min: target_frequency_param(&name("Target Minimum"), 100.0),
             target_max: target_frequency_param(&name("Target Maximum"), 600.0),
@@ -341,6 +346,7 @@ impl BandParams {
 
 #[derive(Clone, Copy)]
 pub struct BandRef<'a> {
+    pub dynamics: &'a DynamicParams,
     pub gain: &'a FloatParam,
     pub q: &'a FloatParam,
     pub ratio: &'a FloatParam,
@@ -352,6 +358,7 @@ pub struct BandRef<'a> {
 impl BandRef<'_> {
     pub fn control(self) -> BandControl {
         BandControl {
+            dynamics: self.dynamics.control(),
             gain: self.gain.value(),
             q: self.q.value(),
             ratio: self.ratio.value(),
@@ -376,6 +383,7 @@ impl ProcessingParams {
     pub fn band(&self, index: usize) -> BandRef<'_> {
         if index == 0 {
             BandRef {
+                dynamics: &self.dynamics[index],
                 gain: &self.gain,
                 q: &self.q,
                 ratio: &self.ratio,
@@ -387,6 +395,7 @@ impl ProcessingParams {
             let b = &self.additional[index - 1];
 
             BandRef {
+                dynamics: &self.dynamics[index],
                 gain: &b.gain,
                 q: &b.q,
                 ratio: &b.ratio,

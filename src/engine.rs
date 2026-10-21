@@ -278,6 +278,7 @@ impl Engine {
         for (band, control) in self.bands.iter_mut().zip(controls.bands) {
             wet = band.process(
                 wet,
+                frame.source,
                 control,
                 self.frequency,
                 self.source_started,

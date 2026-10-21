@@ -26,7 +26,15 @@ impl F0Editor {
             p.line_segment([at(0.0, y), at(900.0, y)], Stroke::new(width, color));
         }
 
-        for x in [225.0, 450.0, 675.0] {
+        let band = self.params.band(self.selected.unwrap_or(0));
+        let dynamics_page = band.dynamics.enabled.value() && band.kind.value().has_gain();
+        let dividers = if dynamics_page {
+            vec![168.75, 337.5, 506.25, 675.0]
+        } else {
+            vec![225.0, 450.0, 675.0]
+        };
+
+        for x in dividers {
             p.line_segment(
                 [at(x, 349.0), at(x, 510.0)],
                 Stroke::new(1.0, Color32::from_gray(166)),
@@ -68,36 +76,33 @@ impl F0Editor {
         let Some(gui) = &self.gui else { return };
         let setter = gui.param_setter();
 
-        let band = self.params.band(self.selected.unwrap_or(0));
+        let point_knobs = if dynamics_page {
+            vec![
+                (&band.dynamics.threshold, "Threshold", 84.375, false),
+                (&band.dynamics.range, "Range", 253.125, false),
+                (&band.dynamics.attack, "Dyn.Attack", 421.875, false),
+                (&band.dynamics.release, "Dyn.Release", 590.625, false),
+            ]
+        } else {
+            vec![
+                (band.gain, "Gain", 112.5, true),
+                (band.q, "Q", 337.5, false),
+                (band.ratio, "F0 Ratio", 562.5, false),
+            ]
+        };
+        let point_knobs = point_knobs.into_iter().map(|(param, label, x, bipolar)| {
+            (
+                param,
+                label,
+                x,
+                424.5,
+                bipolar,
+                self.selected.is_some() && (label != "Gain" || band.kind.value().has_gain()),
+                self.accent(),
+            )
+        });
 
-        for (param, label, x, y, bipolar, enabled, color) in [
-            (
-                band.gain,
-                "Gain",
-                112.5,
-                424.5,
-                true,
-                self.selected.is_some() && band.kind.value().has_gain(),
-                self.accent(),
-            ),
-            (
-                band.q,
-                "Q",
-                337.5,
-                424.5,
-                false,
-                self.selected.is_some(),
-                self.accent(),
-            ),
-            (
-                band.ratio,
-                "F0 Ratio",
-                562.5,
-                424.5,
-                false,
-                self.selected.is_some(),
-                self.accent(),
-            ),
+        for (param, label, x, y, bipolar, enabled, color) in point_knobs.chain([
             (
                 &self.params.active().tracking,
                 "Tracking",
@@ -161,7 +166,7 @@ impl F0Editor {
                 true,
                 GLOBAL_ACCENT,
             ),
-        ] {
+        ]) {
             let radius = if y > 511.0 { 35.0 * 0.85 } else { 35.0 };
             let builder = egui::UiBuilder::new()
                 .max_rect(Rect::from_center_size(at(x, y), Vec2::splat(140.0)));
@@ -193,7 +198,7 @@ impl F0Editor {
 
         let band = self.params.band(index);
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(703.5, 411.0), at(872.5, 494.0))),
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(703.5, 397.0), at(871.5, 423.0))),
             |ui| {
                 *ui.visuals_mut() = egui::Visuals::light();
                 ui.visuals_mut().selection.bg_fill = self.accent().gamma_multiply(0.25);
@@ -236,13 +241,46 @@ impl F0Editor {
             },
         );
 
+        let accent = self.accent();
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(703.5, 435.0), at(871.5, 461.0))),
+            |ui| {
+                *ui.visuals_mut() = egui::Visuals::light();
+                ui.visuals_mut().selection.bg_fill = accent.gamma_multiply(0.25);
+                ui.visuals_mut().selection.stroke = Stroke::new(1.0, accent);
+                if ui
+                    .add_enabled_ui(band.kind.value().has_gain(), |ui| {
+                        ui.add_sized(
+                            Vec2::new(168.0, 26.0),
+                            egui::Button::new("Dynamics").selected(dynamics_page),
+                        )
+                    })
+                    .inner
+                    .clicked()
+                {
+                    set_value(&setter, &band.dynamics.enabled, !dynamics_page);
+                }
+            },
+        );
+
         if v[7] > 0.0 && v[2] > 0.0 {
             p.text(
-                at(787.5, 472.0),
+                at(787.5, 485.0),
                 egui::Align2::CENTER_CENTER,
                 format!("{:.1} Hz", (v[2] * band.ratio.value()).min(v[7] * 0.49)),
                 FontId::monospace(14.0),
                 Color32::from_gray(73),
+            );
+        }
+
+        if dynamics_page {
+            let reduction = self.telemetry.bands()[index][9];
+            p.text(
+                at(787.5, 505.0),
+                egui::Align2::CENTER_BOTTOM,
+                format!("{reduction:.2} dB"),
+                FontId::monospace(11.0),
+                Color32::from_gray(91),
             );
         }
     }

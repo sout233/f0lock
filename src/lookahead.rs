@@ -44,6 +44,7 @@ impl LookaheadTime {
 #[derive(Clone, Copy, Default)]
 pub struct Frame {
     pub audio: [f32; 2],
+    pub source: [f32; 2],
     pub controls: Controls,
     pub estimate: Option<Estimate>,
     pub source_active: bool,
@@ -112,6 +113,7 @@ impl Lookahead {
         if !self.enabled {
             return Some(Frame {
                 audio,
+                source,
                 controls,
                 estimate: if changed_source {
                     Some(Estimate::default())
@@ -132,6 +134,7 @@ impl Lookahead {
         let index = (self.time % capacity) as usize;
         self.frames[index] = Frame {
             audio,
+            source,
             controls,
             estimate: changed_source.then_some(Estimate::default()),
             source_active: source[0].abs().max(source[1].abs()) >= self.gate_amplitude,

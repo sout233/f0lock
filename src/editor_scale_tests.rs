@@ -39,7 +39,7 @@ fn chosen_ui_scale_survives_editor_recreation_and_project_state_restore() {
     f.frame(vec![]);
 
     assert_eq!(f.ctx.zoom_factor(), 1.5);
-    assert_eq!(f.editor.params.param_map().len(), 126);
+    assert_eq!(f.editor.params.param_map().len(), 206);
     assert_eq!(f.editor.params.active().gain.value(), -6.0);
 }
 

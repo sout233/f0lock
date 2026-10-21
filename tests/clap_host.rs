@@ -121,6 +121,13 @@ unsafe fn saved_band_state_round_trip(
             ("Band 2 ratio", "2.5"),
             ("Band 2 type", "High Shelf"),
             ("Band 2 gain", "4.5 dB"),
+            ("Band 2 dynamic enabled", "On"),
+            ("Band 2 dynamic threshold", "-30 dBFS"),
+            ("Band 2 dynamic range", "-9 dB"),
+            ("Band 2 dynamic attack", "22 ms"),
+            ("Band 2 dynamic release", "180 ms"),
+            ("Sidechain Band 1 dynamic enabled", "On"),
+            ("Sidechain Band 1 dynamic threshold", "-36 dBFS"),
         ] {
             let mut selected = None;
 
@@ -423,7 +430,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         assert_eq!(sidechain_info.channel_count, 2);
         assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 126);
+        assert_eq!(count, 206);
         let mut gain_id = None;
         let mut bypass_id = None;
 

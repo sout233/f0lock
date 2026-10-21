@@ -1,6 +1,9 @@
 mod analyzer;
 mod band;
 mod detector;
+mod dynamics;
+#[cfg(test)]
+mod dynamics_tests;
 mod editor;
 mod engine;
 mod filter;

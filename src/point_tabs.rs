@@ -156,6 +156,11 @@ impl F0Editor {
         set_value(&setter, band.q, 3.0);
         set_value(&setter, band.kind, FilterKind::Peak);
         set_value(&setter, band.enabled, true);
+        set_value(&setter, &band.dynamics.enabled, false);
+        set_value(&setter, &band.dynamics.threshold, -24.0);
+        set_value(&setter, &band.dynamics.range, -6.0);
+        set_value(&setter, &band.dynamics.attack, 10.0);
+        set_value(&setter, &band.dynamics.release, 100.0);
         set_value(&setter, band.exists, true);
 
         self.selected = Some(index);

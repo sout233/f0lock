@@ -20,35 +20,41 @@ fn every_filter_uses_attack_and_release_for_its_processing_amount() {
             let steps = [1.0 / (0.05 * rate), 1.0 / (0.2 * rate)];
 
             for _ in 0..(0.025 * rate) as usize {
-                band.process([0.1; 2], control, 220.0, true, rate, alpha, steps);
+                band.process([0.1; 2], [0.1; 2], control, 220.0, true, rate, alpha, steps);
             }
 
             assert!((band.wet - 0.5).abs() < 0.0003, "{kind:?} at {rate}");
 
             for _ in 0..(0.03 * rate) as usize {
-                band.process([0.1; 2], control, 220.0, true, rate, alpha, steps);
+                band.process([0.1; 2], [0.1; 2], control, 220.0, true, rate, alpha, steps);
             }
 
             assert_eq!(band.wet, 1.0);
 
             for _ in 0..(0.1 * rate) as usize {
-                band.process([0.1; 2], control, 220.0, false, rate, alpha, steps);
+                band.process(
+                    [0.1; 2], [0.1; 2], control, 220.0, false, rate, alpha, steps,
+                );
             }
 
             assert!((band.wet - 0.5).abs() < 0.001, "{kind:?} at {rate}");
             assert_eq!(band.gain, -12.0, "Release must not also fade filter gain");
 
             let previous = band.wet;
-            band.process([0.1; 2], control, 220.0, true, rate, alpha, steps);
+            band.process([0.1; 2], [0.1; 2], control, 220.0, true, rate, alpha, steps);
             assert!((band.wet - previous - steps[0]).abs() < 1e-6);
 
             for _ in 0..(0.21 * rate) as usize {
-                band.process([0.1; 2], control, 220.0, false, rate, alpha, steps);
+                band.process(
+                    [0.1; 2], [0.1; 2], control, 220.0, false, rate, alpha, steps,
+                );
             }
 
             assert_eq!(band.wet, 0.0);
             assert_eq!(
-                band.process([0.1; 2], control, 220.0, false, rate, alpha, steps),
+                band.process(
+                    [0.1; 2], [0.1; 2], control, 220.0, false, rate, alpha, steps
+                ),
                 [0.1; 2]
             );
         }

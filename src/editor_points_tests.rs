@@ -4,6 +4,9 @@ use super::*;
 #[path = "editor_knob_tests.rs"]
 mod knob_tests;
 
+#[path = "editor_dynamics_tests.rs"]
+mod dynamics_tests;
+
 #[path = "editor_spectrum_tests.rs"]
 mod spectrum_tests;
 
