@@ -47,6 +47,19 @@ impl F0Editor {
 
         let plot = Plot::new(outer, v[7]);
         draw_grid(&p, &plot, outer);
+
+        if self.params.bypass.value() {
+            self.context_point = None;
+            p.text(
+                plot.rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "BYPASS",
+                FontId::new(80.0, egui::FontFamily::Name(GLOBAL_FONT.into())),
+                Color32::from_white_alpha(36),
+            );
+            return;
+        }
+
         draw_spectrum(&p, &plot, &self.telemetry.spectrum());
 
         let bands = self.telemetry.bands();
