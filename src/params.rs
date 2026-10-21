@@ -25,6 +25,12 @@ pub struct F0Params {
     #[id = "tracking"]
     pub tracking: FloatParam,
 
+    #[id = "attack"]
+    pub attack: FloatParam,
+
+    #[id = "release"]
+    pub release: FloatParam,
+
     #[id = "clarity"]
     pub clarity: FloatParam,
 
@@ -91,6 +97,28 @@ impl Default for F0Params {
                     min: 5.0,
                     max: 300.0,
                     factor: FloatRange::skew_factor(-1.0),
+                },
+            )
+            .with_unit(" ms"),
+
+            attack: FloatParam::new(
+                "Attack",
+                10.0,
+                FloatRange::Skewed {
+                    min: 0.1,
+                    max: 300.0,
+                    factor: FloatRange::skew_factor(-2.0),
+                },
+            )
+            .with_unit(" ms"),
+
+            release: FloatParam::new(
+                "Release",
+                100.0,
+                FloatRange::Skewed {
+                    min: 1.0,
+                    max: 2000.0,
+                    factor: FloatRange::skew_factor(-2.0),
                 },
             )
             .with_unit(" ms"),

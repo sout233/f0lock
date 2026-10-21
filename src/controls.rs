@@ -6,13 +6,13 @@ impl F0Editor {
         let p = ui.painter_at(canvas);
         gradient_rect(
             &p,
-            Rect::from_min_max(at(0.0, 346.0), at(900.0, 503.0)),
+            Rect::from_min_max(at(0.0, 346.0), at(900.0, 511.0)),
             Color32::from_gray(213),
             Color32::from_gray(201),
         );
         gradient_rect(
             &p,
-            Rect::from_min_max(at(0.0, 503.0), at(900.0, 660.0)),
+            Rect::from_min_max(at(0.0, 511.0), at(900.0, 684.0)),
             Color32::from_gray(200),
             Color32::from_gray(190),
         );
@@ -20,29 +20,50 @@ impl F0Editor {
         for (y, color, width) in [
             (346.0, Color32::from_gray(19), 2.0),
             (348.0, Color32::from_gray(243), 1.0),
-            (503.0, Color32::from_gray(151), 1.0),
-            (504.0, Color32::from_gray(228), 1.0),
+            (511.0, Color32::from_gray(151), 1.0),
+            (512.0, Color32::from_gray(228), 1.0),
         ] {
             p.line_segment([at(0.0, y), at(900.0, y)], Stroke::new(width, color));
         }
 
         for x in [225.0, 450.0, 675.0] {
             p.line_segment(
-                [at(x, 349.0), at(x, 502.0)],
+                [at(x, 349.0), at(x, 510.0)],
                 Stroke::new(1.0, Color32::from_gray(166)),
             );
             p.line_segment(
-                [at(x + 1.0, 349.0), at(x + 1.0, 502.0)],
+                [at(x + 1.0, 349.0), at(x + 1.0, 510.0)],
                 Stroke::new(1.0, Color32::from_gray(232)),
             );
         }
         p.text(
-            at(0.0, 503.0),
+            at(0.0, 511.0),
             egui::Align2::LEFT_TOP,
             "GLOBAL",
             FontId::new(48.0, egui::FontFamily::Name(GLOBAL_FONT.into())),
             Color32::from_rgba_unmultiplied(91, 91, 91, 26),
         );
+
+        for (x, label) in [(175.0, "DETECTION"), (490.0, "ENVELOPE"), (770.0, "OUTPUT")] {
+            p.text(
+                at(x, 526.0),
+                egui::Align2::CENTER_CENTER,
+                label,
+                FontId::proportional(11.0),
+                Color32::from_gray(112),
+            );
+        }
+
+        for x in [350.0, 630.0] {
+            p.line_segment(
+                [at(x, 528.0), at(x, 652.0)],
+                Stroke::new(1.0, Color32::from_gray(172)),
+            );
+            p.line_segment(
+                [at(x + 1.0, 528.0), at(x + 1.0, 652.0)],
+                Stroke::new(1.0, Color32::from_gray(218)),
+            );
+        }
 
         let Some(gui) = &self.gui else { return };
         let setter = gui.param_setter();
@@ -80,8 +101,26 @@ impl F0Editor {
             (
                 &self.params.tracking,
                 "Tracking",
-                90.0,
-                583.0,
+                65.0,
+                602.0,
+                false,
+                true,
+                GLOBAL_ACCENT,
+            ),
+            (
+                &self.params.attack,
+                "Attack",
+                435.0,
+                602.0,
+                false,
+                true,
+                GLOBAL_ACCENT,
+            ),
+            (
+                &self.params.release,
+                "Release",
+                545.0,
+                602.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -89,8 +128,8 @@ impl F0Editor {
             (
                 &self.params.gate,
                 "Gate",
-                270.0,
-                583.0,
+                175.0,
+                602.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -98,8 +137,8 @@ impl F0Editor {
             (
                 &self.params.clarity,
                 "Clarity",
-                450.0,
-                583.0,
+                285.0,
+                602.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -107,8 +146,8 @@ impl F0Editor {
             (
                 &self.params.mix,
                 "Mix",
-                630.0,
-                583.0,
+                715.0,
+                602.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -116,20 +155,21 @@ impl F0Editor {
             (
                 &self.params.output,
                 "Output",
-                810.0,
-                583.0,
+                825.0,
+                602.0,
                 true,
                 true,
                 GLOBAL_ACCENT,
             ),
         ] {
+            let radius = if y > 511.0 { 35.0 * 0.85 } else { 35.0 };
             let builder = egui::UiBuilder::new()
                 .max_rect(Rect::from_center_size(at(x, y), Vec2::splat(140.0)));
             let builder = if enabled { builder } else { builder.disabled() };
             ui.scope_builder(builder, |ui| {
                 ui.visuals_mut().selection.bg_fill = color.gamma_multiply(0.3);
                 ui.visuals_mut().selection.stroke = Stroke::new(1.0, color);
-                knob::knob(ui, param, &setter, at(x, y), 35.0, label, bipolar);
+                knob::knob(ui, param, &setter, at(x, y), radius, label, bipolar);
             });
         }
         p.text(

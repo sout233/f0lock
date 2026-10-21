@@ -164,10 +164,11 @@ pub fn knob(
     bipolar: bool,
 ) -> Response {
     let id = ui.make_persistent_id(("knob", label));
+    let scale = radius / 35.0;
 
     let response = ui
         .interact(
-            Rect::from_center_size(center, Vec2::splat((radius + 15.0) * 2.0)),
+            Rect::from_center_size(center, Vec2::splat((radius + 15.0 * scale) * 2.0)),
             id,
             Sense::click_and_drag(),
         )
@@ -299,19 +300,19 @@ pub fn knob(
     let body_center = Pos2::new(
         p.round_to_pixel_center(center.x),
         p.round_to_pixel_center(center.y),
-    ) + Vec2::new(0.0, press * 0.8);
-    let blur = (11.0 + hover * 7.0) * (1.0 - press) + 4.0 * press;
+    ) + Vec2::new(0.0, press * 0.8 * scale);
+    let blur = ((11.0 + hover * 7.0) * (1.0 - press) + 4.0 * press) * scale;
     // Many low-opacity layers approximate a soft shadow without a hard outer edge.
     for i in (0..16).rev() {
         let t = i as f32 / 15.0;
         p.circle_filled(
-            body_center + Vec2::new(1.5, (5.0 + hover * 2.0) * (1.0 - press) + 2.0 * press),
+            body_center + Vec2::new(1.5, (5.0 + hover * 2.0) * (1.0 - press) + 2.0 * press) * scale,
             body_radius + t * blur,
             Color32::from_black_alpha((2.0 + 6.0 * (1.0 - t).powi(2)) as u8),
         );
     }
     p.text(
-        center - Vec2::new(0.0, radius + 28.0),
+        center - Vec2::new(0.0, radius + 28.0 * scale),
         egui::Align2::CENTER_CENTER,
         label,
         FontId::proportional(15.0),
@@ -321,10 +322,10 @@ pub fn knob(
     for i in 0..=10 {
         let angle = PI * (0.75 + 1.5 * i as f32 / 10.0);
         let direction = Vec2::angled(angle);
-        let outer = radius + if i % 5 == 0 { 17.0 } else { 14.0 };
+        let outer = radius + if i % 5 == 0 { 17.0 } else { 14.0 } * scale;
         p.line_segment(
             [
-                center + direction * (radius + 11.0),
+                center + direction * (radius + 11.0 * scale),
                 center + direction * outer,
             ],
             Stroke::new(1.0, Color32::from_gray(139)),
@@ -333,7 +334,7 @@ pub fn knob(
     arc(
         p,
         center,
-        radius + 7.0,
+        radius + 7.0 * scale,
         0.0,
         1.0,
         Stroke::new(2.0, Color32::from_gray(158)),
@@ -350,20 +351,20 @@ pub fn knob(
             arc(
                 p,
                 center,
-                radius + 7.0,
+                radius + 7.0 * scale,
                 start,
                 value,
-                Stroke::new(width, accent.gamma_multiply(press * opacity)),
+                Stroke::new(width * scale, accent.gamma_multiply(press * opacity)),
             );
         }
     }
     arc(
         p,
         center,
-        radius + 7.0,
+        radius + 7.0 * scale,
         start,
         value,
-        Stroke::new(3.0, mix(accent, Color32::WHITE, press * 0.42)),
+        Stroke::new(3.0 * scale, mix(accent, Color32::WHITE, press * 0.42)),
     );
 
     let metal = |gray| {
@@ -374,13 +375,25 @@ pub fn knob(
         );
         mix(lit, Color32::from_rgb(147, 151, 157), press * 0.18)
     };
-    disc(p, body_center, body_radius + 1.0, metal(246), metal(124));
-    disc(p, body_center, body_radius - 0.5, metal(132), metal(235));
-    disc(p, body_center, body_radius - 2.0, metal(230), metal(182));
+    disc(p, body_center, body_radius + scale, metal(246), metal(124));
     disc(
         p,
-        body_center - Vec2::new(0.0, 0.8),
-        body_radius - 4.0,
+        body_center,
+        body_radius - 0.5 * scale,
+        metal(132),
+        metal(235),
+    );
+    disc(
+        p,
+        body_center,
+        body_radius - 2.0 * scale,
+        metal(230),
+        metal(182),
+    );
+    disc(
+        p,
+        body_center - Vec2::new(0.0, 0.8 * scale),
+        body_radius - 4.0 * scale,
         metal(226),
         metal(201),
     );
@@ -389,26 +402,33 @@ pub fn knob(
     let a = body_center + direction * (body_radius * 0.53);
     let b = body_center + direction * (body_radius * 0.82);
     p.line_segment(
-        [a + Vec2::new(0.8, 0.9), b + Vec2::new(0.8, 0.9)],
-        Stroke::new(4.0, Color32::from_gray(240)),
+        [
+            a + Vec2::new(0.8, 0.9) * scale,
+            b + Vec2::new(0.8, 0.9) * scale,
+        ],
+        Stroke::new(4.0 * scale, Color32::from_gray(240)),
     );
-    p.line_segment([a, b], Stroke::new(3.5, ink));
+    p.line_segment([a, b], Stroke::new(3.5 * scale, ink));
 
     if response.has_focus() {
         p.circle_stroke(
             center,
-            radius + 21.0,
+            radius + 21.0 * scale,
             Stroke::new(1.0, accent.gamma_multiply(0.6)),
         );
     }
 
     let display = input::value_text(param, value, label);
     p.text(
-        center + Vec2::new(0.0, radius + 29.0),
+        center + Vec2::new(0.0, radius + 29.0 * scale),
         egui::Align2::CENTER_CENTER,
         display,
-        FontId::monospace(14.0),
-        ink,
+        FontId::monospace(13.0),
+        if ui.is_enabled() {
+            Color32::from_gray(88)
+        } else {
+            Color32::from_gray(151)
+        },
     );
 
     response

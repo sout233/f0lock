@@ -77,7 +77,7 @@ impl Fixture {
         self.time += 1.0 / 60.0;
         let mut output = self.ctx.run_ui(
             egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 660.0))),
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0))),
                 events,
                 time: Some(self.time),
                 ..Default::default()
@@ -160,12 +160,13 @@ impl Fixture {
     }
 
     fn knob_position(&self, center: Pos2) -> f32 {
+        let scale = if center.y > 503.0 { 0.85 } else { 1.0 };
         let direction = self
             .shapes
             .iter()
             .find_map(|shape| match &shape.shape {
                 egui::Shape::LineSegment { points, stroke }
-                    if stroke.width == 3.5 && points[1].distance(center) < 35.0 =>
+                    if stroke.width == 3.5 * scale && points[1].distance(center) < 35.0 =>
                 {
                     Some(points[1] - points[0])
                 }
@@ -263,16 +264,18 @@ fn tab_switch_changes_knob_theme_and_keeps_independent_gain() {
 fn global_controls_stay_neutral_and_ratio_edits_the_selected_point() {
     let mut f = Fixture::new();
     f.add();
+    let setter = f.editor.gui.as_ref().unwrap().param_setter();
+    set_value(&setter, &f.editor.params.output, 3.0);
 
     for tab in ["Point 1", "Point 2"] {
         f.click_text(tab);
         f.frame(vec![]);
 
-        for x in [90.0, 270.0, 450.0, 630.0] {
-            let region = Rect::from_center_size(Pos2::new(x, 583.0), Vec2::splat(100.0));
+        for x in [65.0, 175.0, 285.0, 435.0, 545.0, 715.0, 825.0] {
+            let region = Rect::from_center_size(Pos2::new(x, 602.0), Vec2::splat(100.0));
 
             assert!(f.shapes.iter().any(|s| match &s.shape {
-                egui::Shape::Path(path) => path.stroke.width == 3.0
+                egui::Shape::Path(path) => path.stroke.width == 3.0 * 0.85
                     && matches!(path.stroke.color, egui::epaint::ColorMode::Solid(c) if c == GLOBAL_ACCENT)
                     && region.contains(path.visual_bounding_rect().center()),
                 _ => false,
@@ -321,7 +324,7 @@ fn tab_switch_animates_point_knobs_with_ease_out_without_changing_parameters() {
 
     let centers = [112.5, 337.5, 562.5].map(|x| Pos2::new(x, 424.5));
     let before = centers.map(|center| f.knob_position(center));
-    let global = f.knob_position(Pos2::new(90.0, 583.0));
+    let global = f.knob_position(Pos2::new(65.0, 602.0));
 
     f.host.events.lock().unwrap().clear();
     f.click_text("Point 2");
@@ -359,7 +362,7 @@ fn tab_switch_animates_point_knobs_with_ease_out_without_changing_parameters() {
         assert!((f.knob_position(centers[i]) - targets[i]).abs() < 0.00001);
     }
 
-    assert_eq!(global, f.knob_position(Pos2::new(90.0, 583.0)));
+    assert_eq!(global, f.knob_position(Pos2::new(65.0, 602.0)));
     assert_eq!(f.editor.params.band(0).gain.value(), -6.0);
     assert!((f.editor.params.band(1).gain.value() - 12.0).abs() < 0.00001);
     assert!(f.host.events.lock().unwrap().is_empty());
@@ -402,7 +405,7 @@ fn spectrum_does_not_add_or_drag_points() {
 
 #[test]
 fn type_menu_items_are_fully_visible_inside_plugin_window() {
-    let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 660.0));
+    let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0));
 
     for selected in FilterKind::ALL {
         let mut f = Fixture::new();
@@ -444,7 +447,7 @@ fn spectrum_type_submenu_fits_at_right_edge() {
         f.frame(vec![]);
     }
 
-    let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 660.0));
+    let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0));
 
     for kind in FilterKind::ALL {
         let item = f.shapes.iter().rev().find(|shape| {
@@ -536,7 +539,7 @@ fn header_menu_changes_ui_scale_without_editing_audio_parameters() {
     f.click_text("UI Scale");
     f.frame(vec![]);
 
-    let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 660.0));
+    let window = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0));
 
     for text in ["75%", "90%", "100%", "110%", "125%", "150%", "175%", "200%"] {
         let item = f
@@ -553,7 +556,7 @@ fn header_menu_changes_ui_scale_without_editing_audio_parameters() {
     f.click_text("125%");
 
     assert!(f.viewport_commands.iter().any(|command| matches!(command,
-        egui::ViewportCommand::InnerSize(size) if *size == Vec2::new(900.0, 660.0))));
+        egui::ViewportCommand::InnerSize(size) if *size == Vec2::new(900.0, 684.0))));
     f.frame(vec![]);
 
     assert_eq!(f.ctx.zoom_factor(), 1.25);

@@ -51,6 +51,27 @@ describe detection response, not an audio delay. The main audio path and DAW
 reported latency remain zero samples. The Tracking knob independently smooths
 the EQ center frequency after detection.
 
+## Attack and Release
+
+Attack and Release are global, automatable parameters saved with the project.
+Attack defaults to 10 ms (range 0.1–300 ms); Release defaults to 100 ms
+(range 1–2000 ms). They control each enabled point's processing amount,
+independently of the Tracking frequency smoother and overall Mix control.
+
+The processing amount ramps linearly from dry to fully filtered over Attack,
+and from fully filtered to dry over Release. This definition also applies to
+High-pass, Low-pass, and Notch filters. Intermediate amounts mix the original
+and filtered signals, so the response is not necessarily a linear ramp in dB.
+Filter Gain is not faded separately. Partial ramps reverse from their current
+amount at the newly selected slope, without resetting the filter states.
+
+When detection becomes invalid, the frequency smoother freezes at its last
+position while Release fades the processing out. A new valid estimate resumes
+frequency tracking and Attack from the current processing amount. The filter
+states clear only when the point becomes fully dry. Attack and Release begin
+when the detector reports its decision; they add to detection response time
+and do not add delay to the audio path.
+
 Changing modes, resetting the plugin, or passing below Gate clears trajectory
 history. Clarity is still a periodicity threshold for the selected candidate,
 not a calibrated probability that the musical note is correct.

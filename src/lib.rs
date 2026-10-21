@@ -6,6 +6,9 @@ mod engine;
 mod filter;
 #[cfg(test)]
 mod multiband_tests;
+
+#[cfg(test)]
+mod envelope_tests;
 mod params;
 mod pitch;
 mod realtime;
@@ -103,7 +106,7 @@ impl Default for F0Lock {
         Self {
             params: Arc::new(F0Params::default()),
             telemetry: Arc::new(Telemetry::default()),
-            editor_state: EguiEditorState::from_size(LogicalSize::new(900.0, 660.0), 1.0),
+            editor_state: EguiEditorState::from_size(LogicalSize::new(900.0, 684.0), 1.0),
             repaint: RepaintNotifier::new(),
             engine: Engine::new(48000.0),
         }
@@ -146,7 +149,7 @@ impl Plugin for F0Lock {
         } else {
             1.0
         };
-        self.editor_state.set_size(LogicalSize::new(900.0, 660.0));
+        self.editor_state.set_size(LogicalSize::new(900.0, 684.0));
         self.editor_state.set_zoom_factor(scale);
 
         create_egui_editor(
@@ -199,6 +202,8 @@ impl Plugin for F0Lock {
                 bands: std::array::from_fn(|i| self.params.band(i).control()),
                 detection: self.params.detection.value(),
                 tracking_ms: self.params.tracking.value(),
+                attack_ms: self.params.attack.value(),
+                release_ms: self.params.release.value(),
                 clarity: self.params.clarity.value(),
                 gate_db: self.params.gate.value(),
                 mix: self.params.mix.value() * 0.01,

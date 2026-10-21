@@ -7,9 +7,27 @@ fn enter_number(fixture: &mut Fixture, center: Pos2, text: &str) {
 }
 
 #[test]
+fn envelope_knobs_accept_precise_times_through_host_gestures() {
+    let mut f = Fixture::new();
+
+    for (x, value) in [(435.0, "25.125"), (545.0, "456.789")] {
+        enter_number(&mut f, Pos2::new(x, 602.0), value);
+        f.click_text("Apply");
+        f.frame(vec![]);
+    }
+
+    assert!((f.editor.params.attack.value() - 25.125).abs() < 0.0001);
+    assert!((f.editor.params.release.value() - 456.789).abs() < 0.0001);
+    assert_eq!(
+        *f.host.events.lock().unwrap(),
+        vec!["begin", "set", "end", "begin", "set", "end"]
+    );
+}
+
+#[test]
 fn right_click_input_preserves_precision_and_displays_two_decimals() {
     let mut f = Fixture::new();
-    enter_number(&mut f, Pos2::new(90.0, 583.0), "47.529938");
+    enter_number(&mut f, Pos2::new(65.0, 602.0), "47.529938");
     f.click_text("Apply");
     f.frame(vec![]);
 
@@ -22,7 +40,7 @@ fn right_click_input_preserves_precision_and_displays_two_decimals() {
 #[test]
 fn clarity_accepts_percentages_and_enter_confirms_input() {
     let mut f = Fixture::new();
-    enter_number(&mut f, Pos2::new(450.0, 583.0), "82.345");
+    enter_number(&mut f, Pos2::new(285.0, 602.0), "82.345");
     f.frame(vec![egui::Event::Key {
         key: egui::Key::Enter,
         physical_key: None,
@@ -47,7 +65,7 @@ fn invalid_input_and_cancel_never_write_parameters() {
         ("301", "Range: 5.00 to 300.00"),
     ] {
         let mut f = Fixture::new();
-        enter_number(&mut f, Pos2::new(90.0, 583.0), input);
+        enter_number(&mut f, Pos2::new(65.0, 602.0), input);
         f.click_text("Apply");
         f.frame(vec![]);
 
@@ -100,7 +118,7 @@ fn escape_and_tab_switch_discard_unconfirmed_input() {
     assert_eq!(f.editor.params.band(1).gain.value(), 0.0);
     assert!(f.host.events.lock().unwrap().is_empty());
 
-    enter_number(&mut f, Pos2::new(90.0, 583.0), "48");
+    enter_number(&mut f, Pos2::new(65.0, 602.0), "48");
     f.frame(vec![egui::Event::Key {
         key: egui::Key::Escape,
         physical_key: None,

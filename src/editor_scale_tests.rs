@@ -24,7 +24,7 @@ fn chosen_ui_scale_survives_editor_recreation_and_project_state_restore() {
     configure_style(&f.ctx);
     f.frame(vec![]);
     assert!(f.viewport_commands.iter().any(|command| matches!(command,
-        egui::ViewportCommand::InnerSize(size) if *size == Vec2::new(900.0, 660.0))));
+        egui::ViewportCommand::InnerSize(size) if *size == Vec2::new(900.0, 684.0))));
     f.frame(vec![]);
     assert_eq!(f.ctx.zoom_factor(), 1.5);
 
@@ -39,7 +39,7 @@ fn chosen_ui_scale_survives_editor_recreation_and_project_state_restore() {
     f.frame(vec![]);
 
     assert_eq!(f.ctx.zoom_factor(), 1.5);
-    assert_eq!(f.editor.params.param_map().len(), 55);
+    assert_eq!(f.editor.params.param_map().len(), 57);
     assert_eq!(f.editor.params.gain.value(), -6.0);
 }
 

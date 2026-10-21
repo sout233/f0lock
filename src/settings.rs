@@ -19,7 +19,7 @@ impl F0Editor {
 
         if (ctx.zoom_factor() - scale).abs() > 0.001 {
             ctx.set_zoom_factor(scale);
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(900.0, 660.0)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(900.0, 684.0)));
         }
 
         Ok(())
@@ -85,7 +85,7 @@ impl F0Editor {
                                 .store(percent, Ordering::Relaxed);
                             ui.set_zoom_factor(scale);
                             ui.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(
-                                900.0, 660.0,
+                                900.0, 684.0,
                             )));
                             egui::Popup::close_all(ui.ctx());
                         }
@@ -168,6 +168,8 @@ impl F0Editor {
                     .show(ui, |ui| {
                         for (param, label, min, max, speed, unit, factor) in [
                             (&params.tracking, "Tracking", 5.0, 300.0, 1.0, " ms", 1.0),
+                            (&params.attack, "Attack", 0.1, 300.0, 0.1, " ms", 1.0),
+                            (&params.release, "Release", 1.0, 2000.0, 1.0, " ms", 1.0),
                             (&params.gate, "Gate", -80.0, -20.0, 0.1, " dBFS", 1.0),
                             (&params.clarity, "Clarity", 50.0, 99.0, 0.1, " %", 100.0),
                         ] {

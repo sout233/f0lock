@@ -117,7 +117,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
         modifiers: Default::default(),
     };
 
-    let entry_pos = Pos2::new(90.0, 583.0);
+    let entry_pos = Pos2::new(65.0, 602.0);
     let entry_button = |pressed| egui::Event::PointerButton {
         pos: entry_pos,
         button: egui::PointerButton::Secondary,
@@ -144,7 +144,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
         (9.3, vec![], Some("numeric-entry")),
     ] {
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 660.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0))),
             time: Some(time),
             events,
             ..Default::default()
@@ -157,7 +157,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
                     editor.draw(ui);
 
                     assert!(
-                        ui.min_rect().bottom() <= 660.0 && ui.min_rect().right() <= 900.0,
+                        ui.min_rect().bottom() <= 684.0 && ui.min_rect().right() <= 900.0,
                         "Editor overflows: {:?}",
                         ui.min_rect()
                     );
@@ -201,7 +201,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
             std::fs::write(
                 format!("target/preview/{snapshot}.json"),
                 serde_json::to_vec(&json!({
-                    "width": 900, "height": 660, "textures": textures, "meshes": meshes
+                    "width": 900, "height": 684, "textures": textures, "meshes": meshes
                 }))
                 .unwrap(),
             )
@@ -231,7 +231,7 @@ fn input_frame(
     events.insert(0, egui::Event::ModifiersChanged(modifiers));
     let mut output = ctx.run_ui(
         egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 660.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0))),
             events,
             ..Default::default()
         },

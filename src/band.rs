@@ -57,6 +57,7 @@ impl Band {
         voiced: bool,
         rate: f32,
         alpha: f32,
+        envelope_steps: [f32; 2],
     ) -> [f32; 2] {
         let active = control.exists && control.enabled && voiced;
 
@@ -66,7 +67,7 @@ impl Band {
         }
 
         let target_frequency = (f0 * control.ratio).min(rate * 0.49);
-        let target_gain = if voiced { control.gain } else { 0.0 };
+        let target_gain = control.gain;
 
         if self.wet == 0.0 {
             self.log_ratio = f64::from(control.ratio).ln();
@@ -87,7 +88,9 @@ impl Band {
         // Smooth the poles AND output taps, retaining integrator states across type changes.
         self.coefficients = self.coefficients.approach(target, alpha);
 
-        let step = 1.0 / (rate * 0.01);
+        // A full 0-to-1 (or 1-to-0) ramp takes the specified time. Retrigger
+        // from the current amount, preserving filter states until fully dry.
+        let step = envelope_steps[usize::from(!active)];
         self.wet += (f32::from(active) - self.wet).clamp(-step, step);
 
         for (ch, sample) in input.iter_mut().enumerate() {

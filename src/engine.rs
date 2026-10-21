@@ -10,6 +10,8 @@ pub struct Controls {
     pub detection: DetectionMode,
     pub bands: [BandControl; BAND_COUNT],
     pub tracking_ms: f32,
+    pub attack_ms: f32,
+    pub release_ms: f32,
     pub clarity: f32,
     pub gate_db: f32,
     pub mix: f32,
@@ -27,6 +29,8 @@ impl Default for Controls {
             detection: DetectionMode::Mpm,
             bands,
             tracking_ms: 35.0,
+            attack_ms: 10.0,
+            release_ms: 100.0,
             clarity: 0.85,
             gate_db: -55.0,
             mix: 1.0,
@@ -52,6 +56,8 @@ pub struct Engine {
     target_log_frequency: f64,
     tracking_ms: f32,
     tracking_alpha: f64,
+    envelope_ms: [f32; 2],
+    envelope_steps: [f32; 2],
     mix: f32,
     output_db: f32,
     bypass: f32,
@@ -77,6 +83,8 @@ impl Engine {
             target_log_frequency: 150.0_f64.ln(),
             tracking_ms: 35.0,
             tracking_alpha: 1.0 - (-1.0 / (0.035 * f64::from(sample_rate))).exp(),
+            envelope_ms: [10.0, 100.0],
+            envelope_steps: [1.0 / (0.01 * sample_rate), 1.0 / (0.1 * sample_rate)],
             mix: 1.0,
             output_db: 0.0,
             bypass: 0.0,
@@ -122,9 +130,21 @@ impl Engine {
                     .exp();
         }
 
-        self.log_frequency +=
-            self.tracking_alpha * (self.target_log_frequency - self.log_frequency);
+        if self.estimate.frequency > 0.0 {
+            self.log_frequency +=
+                self.tracking_alpha * (self.target_log_frequency - self.log_frequency);
+        }
         self.frequency = self.log_frequency.exp() as f32;
+
+        for (i, time) in [controls.attack_ms, controls.release_ms]
+            .into_iter()
+            .enumerate()
+        {
+            if time != self.envelope_ms[i] {
+                self.envelope_ms[i] = time;
+                self.envelope_steps[i] = 1.0 / (time * 0.001 * self.sample_rate);
+            }
+        }
         self.mix += self.control_alpha * (controls.mix - self.mix);
         self.output_db += self.control_alpha * (controls.output_db - self.output_db);
 
@@ -141,6 +161,7 @@ impl Engine {
                 self.estimate.frequency > 0.0,
                 self.sample_rate,
                 self.control_alpha,
+                self.envelope_steps,
             );
         }
 

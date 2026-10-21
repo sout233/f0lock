@@ -66,6 +66,8 @@ unsafe fn saved_band_state_round_trip(
 
         for (name, text) in [
             ("Pitch Detection", "pYIN"),
+            ("Attack", "25 ms"),
+            ("Release", "250 ms"),
             ("Band 2 exists", "On"),
             ("Band 2 ratio", "2.5"),
             ("Band 2 type", "High Shelf"),
@@ -337,7 +339,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
 
         assert!(!params.is_null());
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 55);
+        assert_eq!(count, 57);
         let mut gain_id = None;
         let mut bypass_id = None;
 
