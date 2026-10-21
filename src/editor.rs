@@ -117,7 +117,7 @@ impl F0Editor {
             style.visuals.selection.stroke = Stroke::new(1.0, self.accent());
         });
 
-        let (canvas, _) = ui.allocate_exact_size(Vec2::new(900.0, 684.0), Sense::hover());
+        let (canvas, _) = ui.allocate_exact_size(Vec2::new(900.0, 724.0), Sense::hover());
         let origin = canvas.min.to_vec2();
         let at = |x, y| Pos2::new(x, y) + origin;
 

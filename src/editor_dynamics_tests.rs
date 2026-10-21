@@ -1,12 +1,61 @@
 use super::*;
 
 #[test]
-fn dynamics_page_preserves_eq_and_global_envelopes_and_edits_only_the_selected_point() {
+fn dynamics_indicator_and_label_toggle_the_same_parameter() {
+    let mut f = Fixture::new();
+    f.host.events.lock().unwrap().clear();
+    f.click(Pos2::new(383.0, 373.0), egui::PointerButton::Primary);
+    assert!(f.editor.params.band(0).dynamics.enabled.value());
+    f.click_text("Dynamics");
+    assert!(!f.editor.params.band(0).dynamics.enabled.value());
+    assert_eq!(
+        *f.host.events.lock().unwrap(),
+        vec!["begin", "set", "end", "begin", "set", "end"]
+    );
+}
+
+#[test]
+fn dynamics_switch_preserves_all_controls_and_edits_only_the_selected_point() {
     let mut f = Fixture::new();
     f.add();
+    f.frame(vec![]);
+    let labels = [
+        "Gain",
+        "Q",
+        "F0 Ratio",
+        "Threshold",
+        "Range",
+        "Dyn.Attack",
+        "Dyn.Release",
+    ];
+    let before = labels.map(|label| {
+        f.shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(t) if t.galley.job.text == label => {
+                    Some(shape.shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("Missing control while dynamics is off: {label}"))
+    });
     f.host.events.lock().unwrap().clear();
     f.click_text("Dynamics");
     f.frame(vec![]);
+
+    for (label, bounds) in labels.into_iter().zip(before) {
+        let after = f
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(t) if t.galley.job.text == label => {
+                    Some(shape.shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("Missing control while dynamics is on: {label}"));
+        assert_eq!(bounds, after, "{label} moved when enabling dynamics");
+    }
 
     for label in [
         "Threshold",
@@ -36,7 +85,7 @@ fn dynamics_page_preserves_eq_and_global_envelopes_and_edits_only_the_selected_p
     f.click_text("Point 2");
     f.frame(vec![]);
 
-    f.click(Pos2::new(421.875, 424.5), egui::PointerButton::Secondary);
+    f.click(Pos2::new(680.0, 465.0), egui::PointerButton::Secondary);
     f.frame(vec![]);
     f.frame(vec![egui::Event::Text("33.25".to_owned())]);
     f.click_text("Apply");

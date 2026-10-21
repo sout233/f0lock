@@ -101,7 +101,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
     let mut textures = Vec::new();
     let mut meshes = Vec::new();
 
-    let pos = Pos2::new(337.5, 424.5);
+    let pos = Pos2::new(175.0, 465.0);
     let button = |pressed| egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,
@@ -117,7 +117,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
         modifiers: Default::default(),
     };
 
-    let entry_pos = Pos2::new(65.0, 602.0);
+    let entry_pos = Pos2::new(65.0, 642.0);
     let entry_button = |pressed| egui::Event::PointerButton {
         pos: entry_pos,
         button: egui::PointerButton::Secondary,
@@ -172,7 +172,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
             );
         }
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 724.0))),
             time: Some(time),
             events,
             ..Default::default()
@@ -185,7 +185,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
                     editor.draw(ui);
 
                     assert!(
-                        ui.min_rect().bottom() <= 684.0 && ui.min_rect().right() <= 900.0,
+                        ui.min_rect().bottom() <= 724.0 && ui.min_rect().right() <= 900.0,
                         "Editor overflows: {:?}",
                         ui.min_rect()
                     );
@@ -234,7 +234,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
             std::fs::write(
                 format!("target/preview/{snapshot}.json"),
                 serde_json::to_vec(&json!({
-                    "width": 900, "height": 684, "textures": textures, "meshes": meshes
+                    "width": 900, "height": 724, "textures": textures, "meshes": meshes
                 }))
                 .unwrap(),
             )
@@ -264,7 +264,7 @@ fn input_frame(
     events.insert(0, egui::Event::ModifiersChanged(modifiers));
     let mut output = ctx.run_ui(
         egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 724.0))),
             events,
             ..Default::default()
         },
@@ -288,7 +288,7 @@ fn drag_gain(fine: bool) -> f32 {
         ..Default::default()
     };
 
-    let center = Pos2::new(114.0, 440.0);
+    let center = Pos2::new(65.0, 465.0);
 
     input_frame(&ctx, &mut editor, vec![], modifiers);
 
@@ -311,7 +311,7 @@ fn drag_gain(fine: bool) -> f32 {
         input_frame(
             &ctx,
             &mut editor,
-            vec![egui::Event::PointerMoved(Pos2::new(114.0, y))],
+            vec![egui::Event::PointerMoved(Pos2::new(65.0, y))],
             modifiers,
         );
     }
@@ -320,7 +320,7 @@ fn drag_gain(fine: bool) -> f32 {
         &ctx,
         &mut editor,
         vec![egui::Event::PointerButton {
-            pos: Pos2::new(114.0, 400.0),
+            pos: Pos2::new(65.0, 400.0),
             button: egui::PointerButton::Primary,
             pressed: false,
             modifiers,
@@ -373,7 +373,7 @@ fn control_click_resets_knob_through_host_gesture() {
         ..Default::default()
     };
 
-    let pos = Pos2::new(114.0, 440.0);
+    let pos = Pos2::new(65.0, 465.0);
 
     input_frame(&ctx, &mut editor, vec![], modifiers);
 

@@ -6,13 +6,13 @@ impl F0Editor {
         let p = ui.painter_at(canvas);
         gradient_rect(
             &p,
-            Rect::from_min_max(at(0.0, 346.0), at(900.0, 511.0)),
+            Rect::from_min_max(at(0.0, 346.0), at(900.0, 551.0)),
             Color32::from_gray(213),
             Color32::from_gray(201),
         );
         gradient_rect(
             &p,
-            Rect::from_min_max(at(0.0, 511.0), at(900.0, 684.0)),
+            Rect::from_min_max(at(0.0, 551.0), at(900.0, 724.0)),
             Color32::from_gray(200),
             Color32::from_gray(190),
         );
@@ -20,112 +20,124 @@ impl F0Editor {
         for (y, color, width) in [
             (346.0, Color32::from_gray(19), 2.0),
             (348.0, Color32::from_gray(243), 1.0),
-            (511.0, Color32::from_gray(151), 1.0),
-            (512.0, Color32::from_gray(228), 1.0),
+            (551.0, Color32::from_gray(151), 1.0),
+            (552.0, Color32::from_gray(228), 1.0),
         ] {
             p.line_segment([at(0.0, y), at(900.0, y)], Stroke::new(width, color));
         }
 
-        let band = self.params.band(self.selected.unwrap_or(0));
-        let dynamics_page = band.dynamics.enabled.value() && band.kind.value().has_gain();
-        let dividers = if dynamics_page {
-            vec![168.75, 337.5, 506.25, 675.0]
-        } else {
-            vec![225.0, 450.0, 675.0]
-        };
-
-        for x in dividers {
+        for (x, top, bottom) in [
+            (350.0, 362.0, 542.0),
+            (350.0, 568.0, 692.0),
+            (630.0, 568.0, 692.0),
+        ] {
             p.line_segment(
-                [at(x, 349.0), at(x, 510.0)],
-                Stroke::new(1.0, Color32::from_gray(166)),
+                [at(x, top), at(x, bottom)],
+                Stroke::new(1.0, Color32::from_gray(172)),
             );
             p.line_segment(
-                [at(x + 1.0, 349.0), at(x + 1.0, 510.0)],
-                Stroke::new(1.0, Color32::from_gray(232)),
+                [at(x + 1.0, top), at(x + 1.0, bottom)],
+                Stroke::new(1.0, Color32::from_gray(228)),
             );
         }
+
         p.text(
-            at(0.0, 511.0),
+            at(0.0, 551.0),
             egui::Align2::LEFT_TOP,
             "GLOBAL",
             FontId::new(48.0, egui::FontFamily::Name(GLOBAL_FONT.into())),
             Color32::from_rgba_unmultiplied(91, 91, 91, 26),
         );
-
         for (x, label) in [(175.0, "DETECTION"), (490.0, "ENVELOPE"), (770.0, "OUTPUT")] {
             p.text(
-                at(x, 526.0),
+                at(x, 566.0),
                 egui::Align2::CENTER_CENTER,
                 label,
                 FontId::proportional(11.0),
                 Color32::from_gray(112),
             );
         }
-
-        for x in [350.0, 630.0] {
-            p.line_segment(
-                [at(x, 528.0), at(x, 652.0)],
-                Stroke::new(1.0, Color32::from_gray(172)),
-            );
-            p.line_segment(
-                [at(x + 1.0, 528.0), at(x + 1.0, 652.0)],
-                Stroke::new(1.0, Color32::from_gray(218)),
-            );
-        }
+        p.text(
+            at(20.0, 373.0),
+            egui::Align2::LEFT_CENTER,
+            "EQ",
+            FontId::proportional(12.0),
+            Color32::from_gray(91),
+        );
 
         let Some(gui) = &self.gui else { return };
         let setter = gui.param_setter();
-
-        let point_knobs = if dynamics_page {
-            vec![
-                (&band.dynamics.threshold, "Threshold", 84.375, false),
-                (&band.dynamics.range, "Range", 253.125, false),
-                (&band.dynamics.attack, "Dyn.Attack", 421.875, false),
-                (&band.dynamics.release, "Dyn.Release", 590.625, false),
-            ]
+        let band = self.params.band(self.selected.unwrap_or(0));
+        let selected = self.selected.is_some();
+        let supported = selected && band.kind.value().has_gain();
+        let dynamic_color = if supported && band.dynamics.enabled.value() {
+            self.accent()
         } else {
-            vec![
-                (band.gain, "Gain", 112.5, true),
-                (band.q, "Q", 337.5, false),
-                (band.ratio, "F0 Ratio", 562.5, false),
-            ]
+            GLOBAL_ACCENT
         };
-        let point_knobs = point_knobs.into_iter().map(|(param, label, x, bipolar)| {
-            (
-                param,
-                label,
-                x,
-                424.5,
-                bipolar,
-                self.selected.is_some() && (label != "Gain" || band.kind.value().has_gain()),
-                self.accent(),
-            )
-        });
 
-        for (param, label, x, y, bipolar, enabled, color) in point_knobs.chain([
+        // EQ and dynamics stay in fixed positions, independently of enable state.
+        for (param, label, x, y, bipolar, enabled, color) in [
+            (
+                band.gain,
+                "Gain",
+                65.0,
+                465.0,
+                true,
+                supported,
+                self.accent(),
+            ),
+            (band.q, "Q", 175.0, 465.0, false, selected, self.accent()),
+            (
+                band.ratio,
+                "F0 Ratio",
+                285.0,
+                465.0,
+                false,
+                selected,
+                self.accent(),
+            ),
+            (
+                &band.dynamics.threshold,
+                "Threshold",
+                420.0,
+                465.0,
+                false,
+                supported,
+                dynamic_color,
+            ),
+            (
+                &band.dynamics.range,
+                "Range",
+                550.0,
+                465.0,
+                false,
+                supported,
+                dynamic_color,
+            ),
+            (
+                &band.dynamics.attack,
+                "Dyn.Attack",
+                680.0,
+                465.0,
+                false,
+                supported,
+                dynamic_color,
+            ),
+            (
+                &band.dynamics.release,
+                "Dyn.Release",
+                810.0,
+                465.0,
+                false,
+                supported,
+                dynamic_color,
+            ),
             (
                 &self.params.active().tracking,
                 "Tracking",
                 65.0,
-                602.0,
-                false,
-                true,
-                GLOBAL_ACCENT,
-            ),
-            (
-                &self.params.active().attack,
-                "Attack",
-                435.0,
-                602.0,
-                false,
-                true,
-                GLOBAL_ACCENT,
-            ),
-            (
-                &self.params.active().release,
-                "Release",
-                545.0,
-                602.0,
+                642.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -134,7 +146,7 @@ impl F0Editor {
                 &self.params.active().gate,
                 "Gate",
                 175.0,
-                602.0,
+                642.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -143,7 +155,25 @@ impl F0Editor {
                 &self.params.active().clarity,
                 "Clarity",
                 285.0,
-                602.0,
+                642.0,
+                false,
+                true,
+                GLOBAL_ACCENT,
+            ),
+            (
+                &self.params.active().attack,
+                "Attack",
+                435.0,
+                642.0,
+                false,
+                true,
+                GLOBAL_ACCENT,
+            ),
+            (
+                &self.params.active().release,
+                "Release",
+                545.0,
+                642.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -152,7 +182,7 @@ impl F0Editor {
                 &self.params.active().mix,
                 "Mix",
                 715.0,
-                602.0,
+                642.0,
                 false,
                 true,
                 GLOBAL_ACCENT,
@@ -161,55 +191,38 @@ impl F0Editor {
                 &self.params.active().output,
                 "Output",
                 825.0,
-                602.0,
+                642.0,
                 true,
                 true,
                 GLOBAL_ACCENT,
             ),
-        ]) {
-            let radius = if y > 511.0 { 35.0 * 0.85 } else { 35.0 };
+        ] {
             let builder = egui::UiBuilder::new()
-                .max_rect(Rect::from_center_size(at(x, y), Vec2::splat(140.0)));
+                .max_rect(Rect::from_center_size(at(x, y), Vec2::splat(110.0)));
             let builder = if enabled { builder } else { builder.disabled() };
             ui.scope_builder(builder, |ui| {
                 ui.visuals_mut().selection.bg_fill = color.gamma_multiply(0.3);
                 ui.visuals_mut().selection.stroke = Stroke::new(1.0, color);
-                knob::knob(ui, param, &setter, at(x, y), radius, label, bipolar);
+                knob::knob(ui, param, &setter, at(x, y), 35.0 * 0.85, label, bipolar);
             });
         }
-        p.text(
-            at(787.5, 361.5),
-            egui::Align2::CENTER_CENTER,
-            "Type",
-            FontId::proportional(15.0),
-            Color32::from_gray(58),
-        );
 
-        let Some(index) = self.selected else {
-            p.text(
-                at(787.5, 424.5),
-                egui::Align2::CENTER_CENTER,
-                "No point",
-                FontId::proportional(14.0),
-                Color32::from_gray(91),
-            );
-            return;
-        };
-
-        let band = self.params.band(index);
+        let accent = self.accent();
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(703.5, 397.0), at(871.5, 423.0))),
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(60.0, 362.0), at(200.0, 384.0))),
             |ui| {
                 *ui.visuals_mut() = egui::Visuals::light();
-                ui.visuals_mut().selection.bg_fill = self.accent().gamma_multiply(0.25);
-                ui.visuals_mut().selection.stroke = Stroke::new(1.0, self.accent());
-
+                ui.visuals_mut().selection.bg_fill = accent.gamma_multiply(0.25);
+                ui.visuals_mut().selection.stroke = Stroke::new(1.0, accent);
                 let button = ui
-                    .push_id("point-type", |ui| {
-                        ui.add_sized(
-                            Vec2::new(168.0, 26.0),
-                            egui::Button::new(band.kind.value().label()),
-                        )
+                    .add_enabled_ui(selected, |ui| {
+                        ui.push_id("point-type", |ui| {
+                            ui.add_sized(
+                                Vec2::new(140.0, 22.0),
+                                egui::Button::new(band.kind.value().label()),
+                            )
+                        })
+                        .inner
                     })
                     .inner;
                 let arrow = button.rect.right_center() - Vec2::new(13.0, 0.0);
@@ -241,47 +254,79 @@ impl F0Editor {
             },
         );
 
-        let accent = self.accent();
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(703.5, 435.0), at(871.5, 461.0))),
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(375.0, 362.0), at(495.0, 384.0))),
             |ui| {
-                *ui.visuals_mut() = egui::Visuals::light();
-                ui.visuals_mut().selection.bg_fill = accent.gamma_multiply(0.25);
-                ui.visuals_mut().selection.stroke = Stroke::new(1.0, accent);
-                if ui
-                    .add_enabled_ui(band.kind.value().has_gain(), |ui| {
-                        ui.add_sized(
-                            Vec2::new(168.0, 26.0),
-                            egui::Button::new("Dynamics").selected(dynamics_page),
+                ui.add_enabled_ui(supported, |ui| {
+                    let response = ui
+                        .interact(
+                            Rect::from_min_max(at(375.0, 362.0), at(495.0, 384.0)),
+                            ui.make_persistent_id("dynamics-switch"),
+                            Sense::click(),
                         )
-                    })
-                    .inner
-                    .clicked()
-                {
-                    set_value(&setter, &band.dynamics.enabled, !dynamics_page);
-                }
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    let lit = supported && band.dynamics.enabled.value();
+                    let lamp = at(383.0, 373.0);
+                    let painter = ui.painter();
+
+                    if lit {
+                        painter.circle_filled(lamp, 9.0, accent.gamma_multiply(0.07));
+                        painter.circle_filled(lamp, 7.5, accent.gamma_multiply(0.14));
+                    }
+                    painter.circle_filled(lamp + Vec2::new(0.0, 0.7), 6.5, Color32::from_gray(130));
+                    painter.circle_filled(lamp, 6.0, Color32::from_gray(57));
+                    painter.circle_stroke(lamp, 6.0, Stroke::new(0.8, Color32::from_gray(237)));
+                    painter.circle_filled(
+                        lamp,
+                        4.3,
+                        if lit { accent } else { Color32::from_gray(110) },
+                    );
+                    painter.text(
+                        at(397.0, 373.0),
+                        egui::Align2::LEFT_CENTER,
+                        "Dynamics",
+                        FontId::proportional(12.0),
+                        Color32::from_gray(if !supported {
+                            151
+                        } else if response.hovered() {
+                            38
+                        } else {
+                            75
+                        }),
+                    );
+
+                    if response.clicked() {
+                        set_value(
+                            &setter,
+                            &band.dynamics.enabled,
+                            !band.dynamics.enabled.value(),
+                        );
+                    }
+                })
+                .inner;
             },
         );
 
-        if v[7] > 0.0 && v[2] > 0.0 {
+        if selected && v[7] > 0.0 && v[2] > 0.0 {
             p.text(
-                at(787.5, 485.0),
+                at(285.0, 373.0),
                 egui::Align2::CENTER_CENTER,
                 format!("{:.1} Hz", (v[2] * band.ratio.value()).min(v[7] * 0.49)),
-                FontId::monospace(14.0),
-                Color32::from_gray(73),
-            );
-        }
-
-        if dynamics_page {
-            let reduction = self.telemetry.bands()[index][9];
-            p.text(
-                at(787.5, 505.0),
-                egui::Align2::CENTER_BOTTOM,
-                format!("{reduction:.2} dB"),
-                FontId::monospace(11.0),
+                FontId::monospace(12.0),
                 Color32::from_gray(91),
             );
+        }
+        if let Some(index) = self.selected {
+            if supported && band.dynamics.enabled.value() {
+                let reduction = self.telemetry.bands()[index][9];
+                p.text(
+                    at(850.0, 373.0),
+                    egui::Align2::RIGHT_CENTER,
+                    format!("{reduction:.2} dB"),
+                    FontId::monospace(12.0),
+                    Color32::from_gray(91),
+                );
+            }
         }
     }
 }

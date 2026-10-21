@@ -120,7 +120,7 @@ impl Default for F0Lock {
         Self {
             params: Arc::new(F0Params::default()),
             telemetry: Arc::new(Telemetry::default()),
-            editor_state: EguiEditorState::from_size(LogicalSize::new(900.0, 684.0), 1.0),
+            editor_state: EguiEditorState::from_size(LogicalSize::new(900.0, 724.0), 1.0),
             repaint: RepaintNotifier::new(),
             engine: Engine::new(48000.0),
         }
@@ -183,7 +183,7 @@ impl Plugin for F0Lock {
         } else {
             1.0
         };
-        self.editor_state.set_size(LogicalSize::new(900.0, 684.0));
+        self.editor_state.set_size(LogicalSize::new(900.0, 724.0));
         self.editor_state.set_zoom_factor(scale);
 
         create_egui_editor(

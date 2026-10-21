@@ -19,7 +19,7 @@ impl F0Editor {
 
         if (ctx.zoom_factor() - scale).abs() > 0.001 {
             ctx.set_zoom_factor(scale);
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(900.0, 684.0)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(900.0, 724.0)));
         }
 
         Ok(())
@@ -88,7 +88,7 @@ impl F0Editor {
                                 .store(percent, Ordering::Relaxed);
                             ui.set_zoom_factor(scale);
                             ui.send_viewport_cmd(egui::ViewportCommand::InnerSize(Vec2::new(
-                                900.0, 684.0,
+                                900.0, 724.0,
                             )));
                             egui::Popup::close_all(ui.ctx());
                         }

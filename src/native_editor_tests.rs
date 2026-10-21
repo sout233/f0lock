@@ -147,7 +147,7 @@ fn native_editor_reopen_keeps_host_size_and_content_scale_consistent() {
     #[cfg(feature = "dpi-trace")]
     let configurations = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let editor = nice_plug_egui::create_egui_editor(
-        EguiEditorState::from_size(dpi::LogicalSize::new(900.0, 684.0), 1.0),
+        EguiEditorState::from_size(dpi::LogicalSize::new(900.0, 724.0), 1.0),
         RepaintNotifier::new(),
         crate::editor_settings(),
         Probe {
@@ -288,7 +288,7 @@ fn native_editor_reopen_keeps_host_size_and_content_scale_consistent() {
             "Native child and host dimensions disagree: {samples:?}"
         );
         assert!(
-            (metric.1.x - 900.0).abs() < 1.0 && (metric.1.y - 684.0).abs() < 1.0,
+            (metric.1.x - 900.0).abs() < 1.0 && (metric.1.y - 724.0).abs() < 1.0,
             "UI cropped or surrounded by empty space: {samples:?}"
         );
         assert!(
