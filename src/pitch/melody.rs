@@ -1,4 +1,4 @@
-use super::{BINS, MIN_HZ, Target, candidates::Observations};
+use super::{BINS, MAX_HZ, MIN_HZ, Target, candidates::Observations};
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex32};
 use std::sync::Arc;
 
@@ -46,7 +46,7 @@ impl MelodyEvidence {
             prefix: vec![0.0; bins + 1],
             // At most one local maximum per two FFT bins.
             peaks: Vec::with_capacity(bins.div_ceil(2)),
-            grid: std::array::from_fn(|i| MIN_HZ * 2.0_f32.powf(i as f32 / 120.0)),
+            grid: std::array::from_fn(|i| (MIN_HZ * 2.0_f32.powf(i as f32 / 120.0)).min(MAX_HZ)),
             weights: std::array::from_fn(|i| 1.0 / ((i + 1) as f32).sqrt()),
             salience: [0.0; BINS],
             frequency: [0.0; BINS],
@@ -154,7 +154,9 @@ impl MelodyEvidence {
             }
 
             if self.salience[i] > 0.0 {
-                self.frequency[i] = weighted_hz / self.salience[i];
+                // Constrained refinement includes both search endpoints. A
+                // tiny interpolation error must not discard a 2000 Hz peak.
+                self.frequency[i] = (weighted_hz / self.salience[i]).clamp(MIN_HZ, MAX_HZ);
                 self.clarity[i] = 1.0 - (-evidence).exp();
             }
         }

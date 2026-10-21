@@ -5,7 +5,7 @@ use std::f32::consts::TAU;
 #[test]
 fn tracking_preserves_sustained_periodic_observations_after_a_clean_attack() {
     for lag in [0, LOOKAHEAD] {
-        let mut tracker = Tracker::new(128.0 / 12000.0);
+        let mut tracker = Tracker::<PERIODIC_BINS>::new(128.0 / 12000.0);
         let mut onset = Observations::default();
         onset.add(220.0, 0.99, 1.0);
 

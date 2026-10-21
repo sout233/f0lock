@@ -23,6 +23,8 @@ from the header menu's **Pitch Detection** submenu. It evaluates multiple harmon
 their trajectories, rather than requiring the complete mixture to be periodic.
 Use **Target → Range / Reference** to identify the voice you want to follow.
 The original MPM, MPM + Tracking and pYIN modes remain available.
+F0LOCK Ψ supports fundamentals from 50 Hz to 2 kHz; the original detectors
+retain their 1 kHz upper limit.
 
 This is pitch tracking, not source separation: an exact octave overlap can still
 be ambiguous in Auto. Clarity in this mode measures spectral evidence, so its

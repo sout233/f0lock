@@ -17,15 +17,20 @@ mod target_tests;
 #[cfg(test)]
 mod melody_tests;
 
+#[cfg(test)]
+mod high_pitch_tests;
+
 use candidates::{Observations, SpectralEvidence, mpm_observations, pyin_observations};
 use nice_plug::prelude::*;
 use pitch_estimate::{McLeodDetector, YinDetector};
 use tracker::Tracker;
 
 pub const MIN_HZ: f32 = 50.0;
-pub const MAX_HZ: f32 = 1000.0;
-// Ten-cent bins cover the same range as the original detector.
-const BINS: usize = 520;
+pub const MAX_HZ: f32 = 2000.0;
+const PERIODIC_MAX_HZ: f32 = 1000.0;
+const PERIODIC_BINS: usize = 520;
+// Ten-cent bins, including the nearest bin for the upper endpoint.
+const BINS: usize = 640;
 const UNVOICED: usize = BINS;
 const STATES: usize = BINS * 2;
 pub const LOOKAHEAD: usize = 3;
@@ -76,6 +81,7 @@ pub struct PitchTracking {
     melody: melody::MelodyEvidence,
     observations: Observations,
     tracker: Tracker,
+    melody_tracker: Tracker<BINS>,
 }
 
 impl PitchTracking {
@@ -88,11 +94,13 @@ impl PitchTracking {
             melody: melody::MelodyEvidence::new(window),
             observations: Observations::default(),
             tracker: Tracker::new(hop as f32 / rate),
+            melody_tracker: Tracker::new(hop as f32 / rate),
         }
     }
 
     pub fn reset(&mut self) {
         self.tracker.reset();
+        self.melody_tracker.reset();
     }
 
     pub fn set_mode(&mut self, mode: DetectionMode) {
@@ -163,7 +171,12 @@ impl PitchTracking {
         } else {
             0
         };
-        let (frequency, clarity) = self.tracker.process(&self.observations, threshold, lag);
+        let (frequency, clarity) = if self.mode == DetectionMode::SpectralMelody {
+            self.melody_tracker
+                .process(&self.observations, threshold, lag)
+        } else {
+            self.tracker.process(&self.observations, threshold, lag)
+        };
         // A delayed decision may predate an automated range change.
         // Keep its trajectory, but never emit a now-excluded pending pitch.
         if target.mode != TargetMode::Auto && !target.allows(frequency) {

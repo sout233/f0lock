@@ -1,4 +1,4 @@
-use super::{BINS, LOOKAHEAD, STATES, UNVOICED, candidates::Observations};
+use super::{BINS, LOOKAHEAD, PERIODIC_BINS, STATES, UNVOICED, candidates::Observations};
 
 const HISTORY: usize = LOOKAHEAD + 1;
 const VOICE_SWITCH: f32 = 0.01;
@@ -10,7 +10,7 @@ struct Frame {
     clarity: [f32; BINS],
 }
 
-pub(super) struct Tracker {
+pub(super) struct Tracker<const PITCH_BINS: usize = PERIODIC_BINS> {
     score: [f32; STATES],
     next: [f32; STATES],
     history: [Frame; HISTORY],
@@ -19,21 +19,21 @@ pub(super) struct Tracker {
     transitions: Vec<f32>,
 }
 
-impl Tracker {
+impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
     pub fn new(hop_seconds: f32) -> Self {
         // Scale the paper's 2.5-semitone triangular transition window from
         // its 256/44100-second hop to this detector's hop duration.
         let radius = (25.0 * hop_seconds / (256.0 / 44100.0)).ceil() as usize;
-        let normalization: [f32; BINS] = std::array::from_fn(|i| {
-            (i.saturating_sub(radius)..=(i + radius).min(BINS - 1))
+        let normalization: [f32; PITCH_BINS] = std::array::from_fn(|i| {
+            (i.saturating_sub(radius)..=(i + radius).min(PITCH_BINS - 1))
                 .map(|j| (radius + 1 - i.abs_diff(j)) as f32)
                 .sum::<f32>()
         });
-        let transitions = (0..BINS)
+        let transitions = (0..PITCH_BINS)
             .flat_map(|i| {
                 (0..=radius).map(move |distance| {
                     let local = (radius + 1 - distance) as f32 / normalization[i];
-                    ((1.0 - NEW_NOTE) * local + NEW_NOTE / BINS as f32).ln()
+                    ((1.0 - NEW_NOTE) * local + NEW_NOTE / PITCH_BINS as f32).ln()
                 })
             })
             .collect();
@@ -56,7 +56,7 @@ impl Tracker {
 
     pub fn reset(&mut self) {
         self.score.fill(f32::NEG_INFINITY);
-        self.score[UNVOICED..].fill(-(BINS as f32).ln());
+        self.score[UNVOICED..UNVOICED + PITCH_BINS].fill(-(PITCH_BINS as f32).ln());
         self.frames = 0;
     }
 
@@ -68,10 +68,10 @@ impl Tracker {
     ) -> (f32, f32) {
         assert!(lag < HISTORY, "Pitch decoder lookahead exceeds its history");
 
-        let best_voiced = (0..BINS)
+        let best_voiced = (0..PITCH_BINS)
             .max_by(|&a, &b| self.score[a].total_cmp(&self.score[b]))
             .unwrap();
-        let best_unvoiced = (UNVOICED..STATES)
+        let best_unvoiced = (UNVOICED..UNVOICED + PITCH_BINS)
             .max_by(|&a, &b| self.score[a].total_cmp(&self.score[b]))
             .unwrap();
         let frame = &mut self.history[self.frames % HISTORY];
@@ -81,14 +81,14 @@ impl Tracker {
 
         let stay = (1.0 - VOICE_SWITCH).ln();
         let switch = VOICE_SWITCH.ln();
-        let jump = (NEW_NOTE / BINS as f32).ln();
+        let jump = (NEW_NOTE / PITCH_BINS as f32).ln();
         let unvoiced = (1.0 - observation.probability.iter().sum::<f32>()).clamp(0.0, 1.0);
 
-        for i in 0..BINS {
+        for i in 0..PITCH_BINS {
             let mut voiced = (best_voiced, self.score[best_voiced] + jump);
             let mut silent = (best_unvoiced, self.score[best_unvoiced] + jump);
 
-            for j in i.saturating_sub(self.radius)..=(i + self.radius).min(BINS - 1) {
+            for j in i.saturating_sub(self.radius)..=(i + self.radius).min(PITCH_BINS - 1) {
                 let transition = self.transitions[j * (self.radius + 1) + i.abs_diff(j)];
                 let voiced_candidate = self.score[j] + transition;
                 let silent_candidate = self.score[j + UNVOICED] + transition;

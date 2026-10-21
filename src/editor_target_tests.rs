@@ -89,3 +89,51 @@ fn invalid_range_is_visible_even_when_the_target_menu_is_closed() {
     assert!(f.shapes.iter().any(|shape| matches!(&shape.shape,
         egui::Shape::Text(t) if t.galley.job.text == "Invalid target range")));
 }
+
+#[test]
+fn target_handles_and_both_parameter_banks_support_two_khz() {
+    use crate::mode::OperatingMode;
+
+    let mut f = Fixture::new();
+
+    for mode in [OperatingMode::Track, OperatingMode::Sidechain] {
+        let bank = f.editor.params.for_mode(mode);
+
+        for param in [&bank.target_min, &bank.target_max, &bank.target_reference] {
+            assert_eq!(param.preview_plain(1.0), 2000.0);
+        }
+    }
+
+    let setter = f.editor.gui.as_ref().unwrap().param_setter();
+    set_value(
+        &setter,
+        &f.editor.params.active().target_mode,
+        TargetMode::Range,
+    );
+    set_value(&setter, &f.editor.params.active().target_max, 1200.0);
+    f.frame(vec![]);
+    f.host.events.lock().unwrap().clear();
+    let x = |hz: f32| 57.0 + (hz / 20.0).ln() / 1000.0_f32.ln() * 786.0;
+    drag(
+        &mut f,
+        Pos2::new(x(1200.0), 220.0),
+        Pos2::new(x(2000.0), 220.0),
+    );
+    assert!((f.editor.params.active().target_max.value() - 2000.0).abs() < 0.1);
+
+    let setter = f.editor.gui.as_ref().unwrap().param_setter();
+    set_value(
+        &setter,
+        &f.editor.params.active().target_mode,
+        TargetMode::Reference,
+    );
+    set_value(&setter, &f.editor.params.active().target_reference, 1500.0);
+    f.frame(vec![]);
+    f.host.events.lock().unwrap().clear();
+    drag(
+        &mut f,
+        Pos2::new(x(1500.0), 220.0),
+        Pos2::new(x(1800.0), 220.0),
+    );
+    assert!((f.editor.params.active().target_reference.value() - 1800.0).abs() < 0.1);
+}

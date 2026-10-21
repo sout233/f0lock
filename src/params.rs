@@ -2,7 +2,7 @@ use crate::{
     band::{BAND_COUNT, BandControl},
     filter::FilterKind,
     mode::OperatingMode,
-    pitch::{DetectionMode, Target, TargetMode},
+    pitch::{DetectionMode, MAX_HZ, MIN_HZ, Target, TargetMode},
 };
 use nice_plug::prelude::*;
 use std::sync::atomic::AtomicU32;
@@ -286,8 +286,8 @@ fn target_frequency_param(name: &str, default: f32) -> FloatParam {
         name,
         default,
         FloatRange::Skewed {
-            min: 50.0,
-            max: 1000.0,
+            min: MIN_HZ,
+            max: MAX_HZ,
             factor: FloatRange::skew_factor(-1.0),
         },
     )

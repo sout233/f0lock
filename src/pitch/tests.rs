@@ -48,7 +48,7 @@ fn temporal_evidence_rejects_transient_octave_errors_but_accepts_new_notes() {
     for ratio in [0.25, 0.5, 2.0, 4.0] {
         let original = 220.0;
         let target = original * ratio;
-        let mut tracker = Tracker::new(128.0 / 12000.0);
+        let mut tracker = Tracker::<PERIODIC_BINS>::new(128.0 / 12000.0);
         let mut stable = Observations::default();
         stable.add(original, 0.99, 0.99);
 
@@ -239,7 +239,7 @@ fn enhanced_backends_do_not_lock_to_dc_noise_or_below_gate_audio() {
 
 #[test]
 fn pyin_commits_three_hops_later_and_reset_discards_pending_frames() {
-    let mut tracker = Tracker::new(128.0 / 12000.0);
+    let mut tracker = Tracker::<PERIODIC_BINS>::new(128.0 / 12000.0);
     let mut observation = Observations::default();
     observation.add(220.0, 0.99, 1.0);
 

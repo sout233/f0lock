@@ -1,5 +1,5 @@
 use super::*;
-use crate::pitch::TargetMode;
+use crate::pitch::{MAX_HZ, MIN_HZ, TargetMode};
 
 const TARGET_COLOR: Color32 = Color32::from_rgb(95, 158, 184);
 
@@ -58,7 +58,7 @@ impl F0Editor {
                     let pointer = response
                         .interact_pointer_pos()
                         .expect("Target drag without pointer");
-                    let frequency = hz(pointer.x).clamp(50.0, 1000.0);
+                    let frequency = hz(pointer.x).clamp(MIN_HZ, MAX_HZ);
                     let value = if target.mode == TargetMode::Reference {
                         (12.0 * (frequency / target.reference).log2())
                             .abs()
@@ -119,7 +119,7 @@ impl F0Editor {
                         .expect("Reference drag without pointer");
                     setter.set_parameter(
                         &self.params.active().target_reference,
-                        hz(pointer.x).clamp(50.0, 1000.0),
+                        hz(pointer.x).clamp(MIN_HZ, MAX_HZ),
                     );
                 }
 

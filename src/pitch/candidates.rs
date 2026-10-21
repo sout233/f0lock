@@ -1,4 +1,4 @@
-use super::{BINS, MAX_HZ, MIN_HZ, Target, TargetMode};
+use super::{BINS, MAX_HZ, MIN_HZ, PERIODIC_MAX_HZ, Target, TargetMode};
 use pitch_estimate::McLeodDetector;
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex32};
 use std::sync::Arc;
@@ -87,7 +87,7 @@ impl SpectralEvidence {
         }
 
         let mut support = 0.0;
-        let harmonics = (MAX_HZ / hz).floor() as usize;
+        let harmonics = (PERIODIC_MAX_HZ / hz).floor() as usize;
 
         for harmonic in 1..=harmonics {
             let bin = (hz * harmonic as f32 * self.input.len() as f32 / rate).round() as usize;
@@ -117,7 +117,7 @@ pub(super) fn mpm_observations(
     mpm.candidates(frame, rate.round() as u32, |pitch| {
         let hz = pitch.frequency * rate / rate.round();
 
-        if (MIN_HZ..=MAX_HZ).contains(&hz) && target.allows(hz) {
+        if (MIN_HZ..=PERIODIC_MAX_HZ).contains(&hz) && target.allows(hz) {
             voiced = voiced.max(pitch.clarity);
             let weight = (24.0 * (pitch.clarity - 1.0)).exp() * evidence.support(hz, rate);
             out.add(hz, pitch.clarity, weight);
@@ -148,7 +148,9 @@ pub(super) fn pyin_observations(
     for i in 2..curve.len() - 1 {
         if curve[i] < curve[i - 1]
             && curve[i] <= curve[i + 1]
-            && (target.mode == TargetMode::Auto || target.allows(rate / refine(difference, i).0))
+            && (target.mode == TargetMode::Auto
+                || ((MIN_HZ..=PERIODIC_MAX_HZ).contains(&(rate / refine(difference, i).0))
+                    && target.allows(rate / refine(difference, i).0)))
             && minimum.is_none_or(|previous| curve[i] < curve[previous])
         {
             minimum = Some(i);
@@ -167,7 +169,8 @@ pub(super) fn pyin_observations(
                 && curve[i] < curve[i - 1]
                 && curve[i] <= curve[i + 1]
                 && (target.mode == TargetMode::Auto
-                    || target.allows(rate / refine(difference, i).0))
+                    || ((MIN_HZ..=PERIODIC_MAX_HZ).contains(&(rate / refine(difference, i).0))
+                        && target.allows(rate / refine(difference, i).0)))
             {
                 selected = i;
                 found = true;
@@ -183,7 +186,11 @@ pub(super) fn pyin_observations(
         // denominator biases a parabola when periods contain only ~8 samples.
         let (lag, _) = refine(difference, selected);
         let (_, depth) = refine(curve, selected);
-        out.add(rate / lag, (1.0 - depth).clamp(0.0, 1.0), mass);
+        let hz = rate / lag;
+
+        if (MIN_HZ..=PERIODIC_MAX_HZ).contains(&hz) {
+            out.add(hz, (1.0 - depth).clamp(0.0, 1.0), mass);
+        }
     }
 }
 
