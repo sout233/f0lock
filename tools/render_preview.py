@@ -13,22 +13,24 @@ from PIL import Image
 
 def render(source: Path, destination: Path) -> None:
     data = json.loads(source.read_text(encoding="utf-8"))
-    atlas = None
+    textures = {}
     for update in data["textures"]:
+        texture = update["id"]
         w, h = update["size"]
         pixels = np.array(update["pixels"], dtype=np.float32).reshape(h, w, 4) / 255
         if update["pos"] is None:
-            atlas = pixels.copy()
+            textures[texture] = pixels.copy()
         else:
             x, y = update["pos"]
-            atlas[y:y + h, x:x + w] = pixels
-    assert atlas is not None, "egui did not export a texture atlas"
+            textures[texture][y:y + h, x:x + w] = pixels
+    assert textures, "egui did not export any textures"
     height, width = data["height"], data["width"]
     canvas = np.zeros((height, width, 4), dtype=np.float32)
     canvas[:, :, 3] = 1
-    th, tw = atlas.shape[:2]
 
     for mesh in data["meshes"]:
+        atlas = textures[mesh["texture"]]
+        th, tw = atlas.shape[:2]
         vertices = np.asarray(mesh["vertices"], dtype=np.float32)
         clip = mesh["clip"]
         for indices in np.asarray(mesh["indices"]).reshape(-1, 3):

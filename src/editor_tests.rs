@@ -144,7 +144,13 @@ fn editor_renders_real_signal_and_exports_meshes() {
         (9.3, vec![], Some("numeric-entry")),
         (10.0, vec![], Some("target-range")),
         (11.0, vec![], Some("target-reference")),
+        (12.0, vec![], None),
+        (13.0, vec![], Some("credits")),
     ] {
+        if time == 12.0 {
+            editor.about_open = true;
+            editor.about_credits = true;
+        }
         if time == 10.0 || time == 11.0 {
             egui::Popup::close_all(&ctx);
             let setter = editor.gui.as_ref().unwrap().param_setter();
@@ -180,11 +186,13 @@ fn editor_renders_real_signal_and_exports_meshes() {
         });
 
         for (id, deltas) in &output.textures_delta.set {
-            assert_eq!(*id, egui::TextureId::Managed(0));
+            let egui::TextureId::Managed(id) = *id else {
+                panic!("Unexpected external texture");
+            };
 
             for delta in deltas {
                 let egui::ImageData::Color(image) = &delta.image;
-                textures.push(json!({ "size": image.size, "pos": delta.pos,
+                textures.push(json!({ "id": id, "size": image.size, "pos": delta.pos,
                     "pixels": image.pixels.iter().map(|p| p.to_array()).collect::<Vec<_>>() }));
             }
         }
@@ -196,7 +204,9 @@ fn editor_renders_real_signal_and_exports_meshes() {
                 panic!("Unexpected rendering callback");
             };
 
-            assert_eq!(mesh.texture_id, egui::TextureId::Managed(0));
+            let egui::TextureId::Managed(texture) = mesh.texture_id else {
+                panic!("Unexpected external texture");
+            };
             assert!(
                 mesh.vertices
                     .iter()
@@ -205,6 +215,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
             let clip = primitive.clip_rect;
             meshes.push(json!({
                 "clip": [clip.min.x, clip.min.y, clip.max.x, clip.max.y],
+                "texture": texture,
                 "indices": mesh.indices,
                 "vertices": mesh.vertices.iter().map(|v| [v.pos.x, v.pos.y, v.uv.x, v.uv.y,
                     v.color.r() as f32, v.color.g() as f32, v.color.b() as f32, v.color.a() as f32]).collect::<Vec<_>>()

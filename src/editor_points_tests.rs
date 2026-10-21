@@ -533,6 +533,13 @@ fn header_menu_opens_audio_settings_and_about() {
     assert!(f.editor.about_open);
     assert!(f.shapes.iter().any(|s| matches!(&s.shape,
         egui::Shape::Text(t) if t.galley.job.text == "fl0lock...dev by sout")));
+    f.click_text("鸣谢");
+    f.frame(vec![]);
+    for name in ["Icewatermelon233（谭荣熙竣）", "网友八顺千"] {
+        assert!(f.shapes.iter().any(|s| matches!(&s.shape,
+            egui::Shape::Text(t) if t.galley.job.text == name)));
+    }
+    assert_eq!(f.editor.credits_image.as_ref().unwrap().size(), [467, 435]);
 }
 
 #[test]

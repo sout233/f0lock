@@ -26,6 +26,7 @@ nice-plug = { path = "vendor/nice-plug/crates/nice-plug", features = ["assert_pr
 egui = { version = "0.37", features = ["default_fonts"] }
 realfft = "3.5"
 pitch-estimate = { path = "vendor/pitch-estimate" }
+png = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 nice-plug-egui = { path = "vendor/nice-plug/crates/nice-plug-egui", default-features = false, features = ["wgpu"] }

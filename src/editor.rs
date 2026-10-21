@@ -9,6 +9,8 @@ use std::{sync::Arc, time::Duration};
 
 #[path = "controls.rs"]
 mod controls;
+#[path = "credits.rs"]
+mod credits;
 #[path = "knob.rs"]
 mod knob;
 #[path = "point_tabs.rs"]
@@ -41,6 +43,8 @@ pub struct F0Editor {
     context_point: Option<usize>,
     notice: Option<Notice>,
     about_open: bool,
+    about_credits: bool,
+    credits_image: Option<egui::TextureHandle>,
     audio_open: bool,
 }
 
@@ -73,6 +77,8 @@ impl F0Editor {
             context_point: None,
             notice: None,
             about_open: false,
+            about_credits: false,
+            credits_image: None,
             audio_open: false,
         }
     }
@@ -184,17 +190,7 @@ impl F0Editor {
 
         self.show_notice(ui.ctx(), canvas.min);
 
-        egui::Window::new("f0lock")
-            .open(&mut self.about_open)
-            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(240.0)
-            .show(ui.ctx(), |ui| {
-                ui.add_space(10.0);
-                ui.label(egui::RichText::new("fl0lock...dev by sout").size(16.0));
-                ui.add_space(10.0);
-            });
+        self.show_about(ui.ctx());
     }
 }
 
@@ -250,6 +246,19 @@ pub(crate) fn configure_style(ctx: &egui::Context) {
         egui::FontFamily::Name(GLOBAL_FONT.into()),
         vec![GLOBAL_FONT.to_owned()],
     );
+    fonts.font_data.insert(
+        "credits-cjk".into(),
+        Arc::new(egui::FontData::from_static(include_bytes!(
+            "../assets/fonts/NotoSansSC-Credits.ttf"
+        ))),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts
+            .families
+            .get_mut(&family)
+            .unwrap()
+            .push("credits-cjk".into());
+    }
     ctx.set_fonts(fonts);
 
     let mut style = egui::Style {

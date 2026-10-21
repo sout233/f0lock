@@ -30,6 +30,11 @@ standalone isn't part of plugin packaging and compiles extra audio I/O crates.
 
 ## credits
 
+- Icewatermelon233（谭荣熙竣）
+- 网友八顺千
+
+![网友八顺千](assets/credits/bashunqian.png)
+
 - [nice-plug](https://codeberg.org/RustAudio/nice-plug)
 - [pitch-estimate](https://github.com/hey-jj/pitch-estimate)
 - [McLeod / Wyvill: A Smarter Way to Find Pitch](https://quod.lib.umich.edu/cgi/p/pod/dod-idx/smarter-way-to-find-pitch.pdf?c=icmc%3Bidno%3Dbbp2372.2005.107%3Bformat%3Dpdf)
