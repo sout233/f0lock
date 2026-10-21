@@ -107,7 +107,7 @@ fn dynamics_switch_preserves_all_controls_and_edits_only_the_selected_point() {
 
     f.click_text("Point 1");
     f.click_text("Peak");
-    f.click_text("High Pass");
+    f.click_text("Low Cut");
     f.click_text("Dynamics");
     f.frame(vec![]);
     assert!(!f.editor.params.band(0).dynamics.enabled.value());

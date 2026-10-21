@@ -1,4 +1,5 @@
 use super::*;
+use crate::filter::CutSlope;
 
 impl F0Editor {
     pub(super) fn controls(&self, ui: &mut egui::Ui, canvas: Rect, v: &[f32; 10]) {
@@ -87,7 +88,15 @@ impl F0Editor {
                 supported,
                 self.accent(),
             ),
-            (band.q, "Q", 175.0, 465.0, false, selected, self.accent()),
+            (
+                band.q,
+                "Q",
+                175.0,
+                465.0,
+                false,
+                selected && !(band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6),
+                self.accent(),
+            ),
             (
                 band.ratio,
                 "F0 Ratio",
@@ -209,7 +218,7 @@ impl F0Editor {
 
         let accent = self.accent();
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(60.0, 362.0), at(200.0, 384.0))),
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(52.0, 362.0), at(152.0, 384.0))),
             |ui| {
                 *ui.visuals_mut() = egui::Visuals::light();
                 ui.visuals_mut().selection.bg_fill = accent.gamma_multiply(0.25);
@@ -218,7 +227,7 @@ impl F0Editor {
                     .add_enabled_ui(selected, |ui| {
                         ui.push_id("point-type", |ui| {
                             ui.add_sized(
-                                Vec2::new(140.0, 22.0),
+                                Vec2::new(100.0, 22.0),
                                 egui::Button::new(band.kind.value().label()),
                             )
                         })
@@ -253,6 +262,38 @@ impl F0Editor {
                     });
             },
         );
+
+        if band.kind.value().is_cut() {
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(Rect::from_min_max(at(160.0, 362.0), at(252.0, 384.0))),
+                |ui| {
+                    *ui.visuals_mut() = egui::Visuals::light();
+                    ui.spacing_mut().interact_size.y = 22.0;
+                    ui.visuals_mut().selection.bg_fill = accent.gamma_multiply(0.25);
+                    ui.visuals_mut().selection.stroke = Stroke::new(1.0, accent);
+                    ui.add_enabled_ui(selected, |ui| {
+                        egui::ComboBox::from_id_salt("cut-slope")
+                            .width(92.0)
+                            .height(240.0)
+                            .selected_text(band.slope.value().label())
+                            .show_ui(ui, |ui| {
+                                for slope in CutSlope::ALL {
+                                    if ui
+                                        .selectable_label(
+                                            band.slope.value() == slope,
+                                            slope.label(),
+                                        )
+                                        .clicked()
+                                    {
+                                        set_value(&setter, band.slope, slope);
+                                    }
+                                }
+                            });
+                    });
+                },
+            );
+        }
 
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(Rect::from_min_max(at(375.0, 362.0), at(495.0, 384.0))),
@@ -316,10 +357,10 @@ impl F0Editor {
 
         if selected && v[7] > 0.0 && v[2] > 0.0 {
             p.text(
-                at(285.0, 373.0),
+                at(300.0, 373.0),
                 egui::Align2::CENTER_CENTER,
                 format!("{:.1} Hz", (v[2] * band.ratio.value()).min(v[7] * 0.49)),
-                FontId::monospace(12.0),
+                FontId::monospace(11.0),
                 Color32::from_gray(91),
             );
         }

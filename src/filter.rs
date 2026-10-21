@@ -14,10 +14,10 @@ pub enum FilterKind {
     #[name = "High Shelf"]
     HighShelf,
     #[id = "highpass"]
-    #[name = "High Pass"]
+    #[name = "Low Cut"]
     Highpass,
     #[id = "lowpass"]
-    #[name = "Low Pass"]
+    #[name = "High Cut"]
     Lowpass,
     #[id = "notch"]
     Notch,
@@ -38,14 +38,95 @@ impl FilterKind {
             Self::Peak => "Peak",
             Self::LowShelf => "Low Shelf",
             Self::HighShelf => "High Shelf",
-            Self::Highpass => "High Pass",
-            Self::Lowpass => "Low Pass",
+            Self::Highpass => "Low Cut",
+            Self::Lowpass => "High Cut",
             Self::Notch => "Notch",
         }
     }
 
     pub fn has_gain(self) -> bool {
         matches!(self, Self::Peak | Self::LowShelf | Self::HighShelf)
+    }
+
+    pub fn is_cut(self) -> bool {
+        matches!(self, Self::Highpass | Self::Lowpass)
+    }
+}
+
+#[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CutSlope {
+    #[id = "6"]
+    #[name = "6 dB/oct"]
+    Db6,
+    #[default]
+    #[id = "12"]
+    #[name = "12 dB/oct"]
+    Db12,
+    #[id = "18"]
+    #[name = "18 dB/oct"]
+    Db18,
+    #[id = "24"]
+    #[name = "24 dB/oct"]
+    Db24,
+    #[id = "30"]
+    #[name = "30 dB/oct"]
+    Db30,
+    #[id = "36"]
+    #[name = "36 dB/oct"]
+    Db36,
+    #[id = "48"]
+    #[name = "48 dB/oct"]
+    Db48,
+    #[id = "72"]
+    #[name = "72 dB/oct"]
+    Db72,
+    #[id = "96"]
+    #[name = "96 dB/oct"]
+    Db96,
+}
+
+impl CutSlope {
+    pub const ALL: [Self; 9] = [
+        Self::Db6,
+        Self::Db12,
+        Self::Db18,
+        Self::Db24,
+        Self::Db30,
+        Self::Db36,
+        Self::Db48,
+        Self::Db72,
+        Self::Db96,
+    ];
+
+    pub fn order(self) -> usize {
+        match self {
+            Self::Db6 => 1,
+            Self::Db12 => 2,
+            Self::Db18 => 3,
+            Self::Db24 => 4,
+            Self::Db30 => 5,
+            Self::Db36 => 6,
+            Self::Db48 => 8,
+            Self::Db72 => 12,
+            Self::Db96 => 16,
+        }
+    }
+
+    pub fn label(self) -> String {
+        format!("{} dB/oct", self.order() * 6)
+    }
+
+    /// Cache these sample-independent section Q values when the slope changes.
+    pub fn section_q(self) -> [f32; 8] {
+        let order = self.order();
+        std::array::from_fn(|i| {
+            if i < order / 2 {
+                let q = 1.0 / (2.0 * (PI * (2 * i + 1) as f32 / (2 * order) as f32).sin());
+                if i == 0 { q * 2.0_f32.sqrt() } else { q }
+            } else {
+                0.0
+            }
+        })
     }
 }
 
@@ -66,6 +147,32 @@ pub struct Coefficients {
 }
 
 impl Coefficients {
+    pub fn identity() -> Self {
+        Self::new(1.0, 1.0, [1.0, 0.0, 0.0])
+    }
+
+    /// Butterworth sections, with the highest-Q section controlled by the Q knob.
+    /// Q = 1/sqrt(2) gives a flat passband at every slope; 12 dB keeps legacy Q.
+    pub fn cut_section(g: f32, q: f32, kind: FilterKind, first_order: bool) -> Self {
+        if first_order {
+            // Exact pole-zero cancellation realizes a first-order TPT section.
+            let mix = if kind == FilterKind::Highpass {
+                [1.0, -1.0, -1.0]
+            } else {
+                [0.0, 1.0, 1.0]
+            };
+            return Self::new(g, 2.0, mix);
+        }
+
+        let k = 1.0 / q;
+        let mix = if kind == FilterKind::Highpass {
+            [1.0, -k, -1.0]
+        } else {
+            [0.0, 0.0, 1.0]
+        };
+        Self::new(g, k, mix)
+    }
+
     pub fn new(g: f32, k: f32, mix: [f32; 3]) -> Self {
         let a1 = 1.0 / (1.0 + g * (g + k));
 

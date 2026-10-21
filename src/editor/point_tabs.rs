@@ -155,6 +155,7 @@ impl F0Editor {
         set_value(&setter, band.gain, if index == 0 { -6.0 } else { 0.0 });
         set_value(&setter, band.q, 3.0);
         set_value(&setter, band.kind, FilterKind::Peak);
+        set_value(&setter, band.slope, crate::filter::CutSlope::default());
         set_value(&setter, band.enabled, true);
         set_value(&setter, &band.dynamics.enabled, false);
         set_value(&setter, &band.dynamics.threshold, -24.0);

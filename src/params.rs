@@ -1,7 +1,7 @@
 use crate::{
     band::{BAND_COUNT, BandControl},
     dynamics::DynamicParams,
-    filter::FilterKind,
+    filter::{CutSlope, FilterKind},
     lookahead::LookaheadTime,
     mode::OperatingMode,
     pitch::{DetectionMode, MAX_HZ, MIN_HZ, Target, TargetMode},
@@ -130,6 +130,9 @@ pub struct ProcessingParams {
     #[id = "f0_type"]
     pub kind: EnumParam<FilterKind>,
 
+    #[id = "f0_slope"]
+    pub slope: EnumParam<CutSlope>,
+
     #[nested(array, group = "Additional band")]
     pub additional: [BandParams; BAND_COUNT - 1],
 
@@ -256,6 +259,7 @@ impl ProcessingParams {
             enabled: BoolParam::new(name("F0 enabled"), true),
             ratio: ratio_param(name("F0 ratio")),
             kind: EnumParam::new(name("F0 type"), FilterKind::Peak),
+            slope: EnumParam::new(name("F0 slope"), CutSlope::default()),
 
             additional: std::array::from_fn(|i| BandParams::new(i + 2, prefix)),
         }
@@ -275,6 +279,9 @@ pub struct BandParams {
 
     #[id = "band_type"]
     pub kind: EnumParam<FilterKind>,
+
+    #[id = "band_slope"]
+    pub slope: EnumParam<CutSlope>,
 
     #[id = "band_exists"]
     pub exists: BoolParam,
@@ -337,6 +344,7 @@ impl BandParams {
 
             ratio: ratio_param(format!("{prefix}Band {number} ratio")),
             kind: EnumParam::new(format!("{prefix}Band {number} type"), FilterKind::Peak),
+            slope: EnumParam::new(format!("{prefix}Band {number} slope"), CutSlope::default()),
 
             exists: BoolParam::new(format!("{prefix}Band {number} exists"), false),
             enabled: BoolParam::new(format!("{prefix}Band {number} enabled"), true),
@@ -351,6 +359,7 @@ pub struct BandRef<'a> {
     pub q: &'a FloatParam,
     pub ratio: &'a FloatParam,
     pub kind: &'a EnumParam<FilterKind>,
+    pub slope: &'a EnumParam<CutSlope>,
     pub exists: &'a BoolParam,
     pub enabled: &'a BoolParam,
 }
@@ -363,6 +372,7 @@ impl BandRef<'_> {
             q: self.q.value(),
             ratio: self.ratio.value(),
             kind: self.kind.value(),
+            slope: self.slope.value(),
             exists: self.exists.value(),
             enabled: self.enabled.value(),
         }
@@ -388,6 +398,7 @@ impl ProcessingParams {
                 q: &self.q,
                 ratio: &self.ratio,
                 kind: &self.kind,
+                slope: &self.slope,
                 exists: &self.exists,
                 enabled: &self.enabled,
             }
@@ -400,6 +411,7 @@ impl ProcessingParams {
                 q: &b.q,
                 ratio: &b.ratio,
                 kind: &b.kind,
+                slope: &b.slope,
                 exists: &b.exists,
                 enabled: &b.enabled,
             }

@@ -1,3 +1,4 @@
+mod cuts;
 mod dynamics;
 mod envelope;
 mod lookahead;

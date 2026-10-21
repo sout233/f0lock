@@ -2,7 +2,7 @@ use super::*;
 use crate::mode::OperatingMode;
 use crate::{
     analyzer::{BINS, bin_frequency, max_frequency},
-    band::{BAND_COUNT, BAND_VALUES},
+    band::{BAND_COUNT, BAND_VALUES, CUT_SECTIONS},
     filter::Coefficients,
 };
 use realfft::num_complex::Complex32;
@@ -313,11 +313,28 @@ fn draw_response(
                 }
 
                 let coefficients = Coefficients::new(band[4], band[5], [band[6], band[7], band[8]]);
-                response *=
-                    Complex32::new(1.0 - band[3], 0.0) + coefficients.response(rate, hz) * band[3];
+                let mut filtered = coefficients.response(rate, hz);
+                for i in 0..CUT_SECTIONS - 1 {
+                    let offset = 10 + i * 6;
+                    let wet = band[offset + 5];
+                    if wet > 0.0 {
+                        let c = Coefficients::new(
+                            band[offset],
+                            band[offset + 1],
+                            [band[offset + 2], band[offset + 3], band[offset + 4]],
+                        );
+                        filtered *= Complex32::new(1.0 - wet, 0.0) + c.response(rate, hz) * wet;
+                    }
+                }
+                response *= Complex32::new(1.0 - band[3], 0.0) + filtered * band[3];
             }
-            Pos2::new(plot.x(hz), plot.y(20.0 * response.norm().max(1e-9).log10()))
+            let db = 20.0 * response.norm().max(1e-9).log10();
+            Pos2::new(
+                plot.x(hz),
+                plot.rect.center().y - db / 48.0 * plot.rect.height(),
+            )
         })
         .collect();
-    p.add(egui::Shape::line(points, Stroke::new(2.0, accent)));
+    p.with_clip_rect(plot.rect)
+        .add(egui::Shape::line(points, Stroke::new(2.0, accent)));
 }

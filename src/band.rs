@@ -1,8 +1,9 @@
 use crate::dynamics::{DynamicControl, Dynamics};
-use crate::filter::{Coefficients, FilterKind, Svf};
+use crate::filter::{Coefficients, CutSlope, FilterKind, Svf};
 
 pub const BAND_COUNT: usize = 8;
-pub const BAND_VALUES: usize = 10;
+pub const CUT_SECTIONS: usize = 8;
+pub const BAND_VALUES: usize = 10 + (CUT_SECTIONS - 1) * 6;
 
 #[derive(Clone, Copy, Debug)]
 pub struct BandControl {
@@ -13,6 +14,7 @@ pub struct BandControl {
     pub gain: f32,
     pub q: f32,
     pub kind: FilterKind,
+    pub slope: CutSlope,
 }
 
 impl Default for BandControl {
@@ -25,13 +27,19 @@ impl Default for BandControl {
             gain: 0.0,
             q: 3.0,
             kind: FilterKind::Peak,
+            slope: CutSlope::default(),
         }
     }
 }
 
 pub struct Band {
     dynamics: Dynamics,
-    filters: [Svf; 2],
+    filters: [[Svf; 2]; CUT_SECTIONS],
+    extra_coefficients: [Coefficients; CUT_SECTIONS - 1],
+    extra_wet: [f32; CUT_SECTIONS - 1],
+    slope: CutSlope,
+    section_q: [f32; CUT_SECTIONS],
+    sections: usize,
     pub coefficients: Coefficients,
     pub frequency: f32,
     pub gain: f32,
@@ -44,7 +52,12 @@ impl Band {
     pub fn new(rate: f32) -> Self {
         Self {
             dynamics: Dynamics::new(rate),
-            filters: [Svf::default(); 2],
+            filters: [[Svf::default(); 2]; CUT_SECTIONS],
+            extra_coefficients: [Coefficients::identity(); CUT_SECTIONS - 1],
+            extra_wet: [0.0; CUT_SECTIONS - 1],
+            slope: CutSlope::default(),
+            section_q: CutSlope::default().section_q(),
+            sections: 1,
             coefficients: Coefficients::bell(rate, 150.0, 3.0, 0.0),
             frequency: 150.0,
             gain: 0.0,
@@ -83,14 +96,23 @@ impl Band {
             control.kind,
         );
         let target_gain = control.gain + dynamic_gain;
+        let section_count = if control.kind.is_cut() {
+            control.slope.order().div_ceil(2)
+        } else {
+            1
+        };
+        if self.slope != control.slope {
+            self.slope = control.slope;
+            self.section_q = self.slope.section_q();
+        }
+        let first_order = control.slope.order() % 2 == 1;
 
-        if self.wet == 0.0 {
+        let starting = self.wet == 0.0;
+        if starting {
             self.log_ratio = f64::from(control.ratio).ln();
             self.frequency = target_frequency;
             self.gain = target_gain;
             self.q = control.q;
-            self.coefficients =
-                Coefficients::for_kind(rate, self.frequency, self.q, self.gain, control.kind);
         }
 
         self.log_ratio += f64::from(alpha) * (f64::from(control.ratio).ln() - self.log_ratio);
@@ -98,10 +120,53 @@ impl Band {
         self.gain += alpha * (target_gain - self.gain);
         self.q += alpha * (control.q - self.q);
 
-        let target = Coefficients::for_kind(rate, self.frequency, self.q, self.gain, control.kind);
+        let target = if control.kind.is_cut() {
+            Coefficients::cut_section(
+                (std::f32::consts::PI * self.frequency / rate).tan(),
+                self.q * self.section_q[0],
+                control.kind,
+                control.slope.order() == 1,
+            )
+        } else {
+            Coefficients::for_kind(rate, self.frequency, self.q, self.gain, control.kind)
+        };
 
         // Smooth the poles AND output taps, retaining integrator states across type changes.
-        self.coefficients = self.coefficients.approach(target, alpha);
+        self.coefficients = if starting {
+            target
+        } else {
+            self.coefficients.approach(target, alpha)
+        };
+
+        self.sections = self.sections.max(section_count);
+        for i in 1..self.sections {
+            let enabled = i < section_count;
+            if enabled {
+                let target = Coefficients::cut_section(
+                    target.g,
+                    self.section_q[i],
+                    control.kind,
+                    first_order && i == section_count - 1,
+                );
+                self.extra_coefficients[i - 1] = if self.extra_wet[i - 1] == 0.0 {
+                    target
+                } else {
+                    self.extra_coefficients[i - 1].approach(target, alpha)
+                };
+            }
+            let wet = &mut self.extra_wet[i - 1];
+            if starting && enabled {
+                *wet = 1.0;
+            } else {
+                *wet += (f32::from(enabled) - *wet).clamp(-alpha, alpha);
+            }
+            if *wet == 0.0 {
+                self.filters[i] = [Svf::default(); 2];
+            }
+        }
+        while self.sections > section_count && self.extra_wet[self.sections - 2] == 0.0 {
+            self.sections -= 1;
+        }
 
         // A full 0-to-1 (or 1-to-0) ramp takes the specified time. Retrigger
         // from the current amount, preserving filter states until fully dry.
@@ -109,18 +174,28 @@ impl Band {
         self.wet += (f32::from(active) - self.wet).clamp(-step, step);
 
         for (ch, sample) in input.iter_mut().enumerate() {
-            let filtered = self.filters[ch].process(*sample, self.coefficients);
+            let mut filtered = self.filters[0][ch].process(*sample, self.coefficients);
+            for i in 1..self.sections {
+                if self.extra_wet[i - 1] > 0.0 {
+                    let next =
+                        self.filters[i][ch].process(filtered, self.extra_coefficients[i - 1]);
+                    filtered += self.extra_wet[i - 1] * (next - filtered);
+                }
+            }
             *sample += self.wet * (filtered - *sample);
         }
 
         if self.wet == 0.0 {
-            self.filters = [Svf::default(); 2];
+            self.filters = [[Svf::default(); 2]; CUT_SECTIONS];
+            self.extra_wet.fill(0.0);
+            self.sections = 1;
         }
         input
     }
 
     pub fn values(&self) -> [f32; BAND_VALUES] {
-        [
+        let mut values = [0.0; BAND_VALUES];
+        values[..10].copy_from_slice(&[
             self.frequency,
             self.gain,
             self.q,
@@ -131,6 +206,18 @@ impl Band {
             self.coefficients.mix[1],
             self.coefficients.mix[2],
             self.dynamics.gain,
-        ]
+        ]);
+        for (i, c) in self.extra_coefficients.iter().enumerate() {
+            let offset = 10 + i * 6;
+            values[offset..offset + 6].copy_from_slice(&[
+                c.g,
+                c.k,
+                c.mix[0],
+                c.mix[1],
+                c.mix[2],
+                self.extra_wet[i],
+            ]);
+        }
+        values
     }
 }

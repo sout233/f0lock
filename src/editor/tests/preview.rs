@@ -104,7 +104,65 @@ fn editor_renders_real_signal_and_exports_meshes() {
         (13.0, vec![], Some("credits")),
         (14.0, vec![], None),
         (15.0, vec![], Some("dynamics")),
+        (16.0, vec![], Some("low-cut")),
+        (17.0, vec![], Some("high-cut")),
+        (
+            18.0,
+            vec![egui::Event::PointerMoved(Pos2::new(205.0, 373.0))],
+            None,
+        ),
+        (
+            18.1,
+            vec![egui::Event::PointerButton {
+                pos: Pos2::new(205.0, 373.0),
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            }],
+            None,
+        ),
+        (
+            18.2,
+            vec![egui::Event::PointerButton {
+                pos: Pos2::new(205.0, 373.0),
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            }],
+            None,
+        ),
+        (19.0, vec![], Some("cut-menu")),
     ] {
+        if time == 16.0 || time == 17.0 {
+            let setter = editor.gui.as_ref().unwrap().param_setter();
+            set_value(
+                &setter,
+                params.band(1).kind,
+                if time == 16.0 {
+                    FilterKind::Highpass
+                } else {
+                    FilterKind::Lowpass
+                },
+            );
+            set_value(
+                &setter,
+                params.band(1).slope,
+                if time == 16.0 {
+                    crate::filter::CutSlope::Db24
+                } else {
+                    crate::filter::CutSlope::Db96
+                },
+            );
+            let controls = crate::engine::Controls {
+                bands: std::array::from_fn(|i| params.band(i).control()),
+                ..crate::engine::Controls::default()
+            };
+            for i in 0..24000 {
+                let x = 0.2 * (std::f32::consts::TAU * 146.83 * i as f32 / 48000.0).sin();
+                engine.process([x; 2], controls);
+            }
+            telemetry.publish(&engine);
+        }
         if time == 11.5 {
             editor.about_open = true;
             editor.about_credits = false;
