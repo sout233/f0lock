@@ -251,3 +251,20 @@ fn pyin_commits_three_hops_later_and_reset_discards_pending_frames() {
     tracker.reset();
     assert_eq!(tracker.process(&observation, 0.85, LOOKAHEAD).0, 0.0);
 }
+
+#[test]
+fn delayed_decoder_uses_the_clarity_threshold_from_its_observation() {
+    let mut tracker = Tracker::<PERIODIC_BINS>::new(128.0 / 12000.0);
+    let mut observation = Observations::default();
+    observation.add(440.0, 0.9, 1.0);
+
+    for _ in 0..12 {
+        tracker.process(&observation, 0.85, LOOKAHEAD);
+    }
+
+    for _ in 0..LOOKAHEAD {
+        assert_eq!(tracker.process(&observation, 0.95, LOOKAHEAD).0, 440.0);
+    }
+
+    assert_eq!(tracker.process(&observation, 0.95, LOOKAHEAD).0, 0.0);
+}

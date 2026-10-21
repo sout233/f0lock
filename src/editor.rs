@@ -170,6 +170,7 @@ impl F0Editor {
         }
 
         self.mode_button(ui, canvas);
+        self.lookahead_button(ui, canvas, &v);
         level_bar(&p, at(609.0, 25.0), v[5]);
         level_bar(&p, at(609.0, 36.0), v[6]);
 

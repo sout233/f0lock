@@ -5,6 +5,7 @@ const VOICE_SWITCH: f32 = 0.01;
 const NEW_NOTE: f32 = 0.01;
 
 struct Frame {
+    threshold: f32,
     previous: [u16; STATES],
     frequency: [f32; BINS],
     clarity: [f32; BINS],
@@ -14,7 +15,7 @@ pub(super) struct Tracker<const PITCH_BINS: usize = PERIODIC_BINS> {
     score: [f32; STATES],
     next: [f32; STATES],
     history: [Frame; HISTORY],
-    frames: usize,
+    pub(super) frames: usize,
     radius: usize,
     transitions: Vec<f32>,
 }
@@ -42,6 +43,7 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
             score: [f32::NEG_INFINITY; STATES],
             next: [f32::NEG_INFINITY; STATES],
             history: std::array::from_fn(|_| Frame {
+                threshold: 0.0,
                 previous: [0; STATES],
                 frequency: [0.0; BINS],
                 clarity: [0.0; BINS],
@@ -77,6 +79,7 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
         let frame = &mut self.history[self.frames % HISTORY];
         frame.frequency = observation.frequency;
         frame.clarity = observation.clarity;
+        frame.threshold = threshold;
         self.next.fill(f32::NEG_INFINITY);
 
         let stay = (1.0 - VOICE_SWITCH).ln();
@@ -148,7 +151,7 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
 
         let frame = &self.history[(self.frames - 1 - lag) % HISTORY];
         let clarity = frame.clarity[state];
-        let frequency = if clarity >= threshold {
+        let frequency = if clarity >= frame.threshold {
             frame.frequency[state]
         } else {
             0.0

@@ -2,6 +2,7 @@ use crate::{
     analyzer::Analyzer,
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
+    lookahead::{Decision, Lookahead},
     mode::OperatingMode,
     pitch::{DetectionMode, Target},
 };
@@ -69,14 +70,21 @@ pub struct Engine {
     bypass: f32,
     control_alpha: f32,
     peak_decay: f32,
+    lookahead: Lookahead,
+    source_started: bool,
+    detector_voiced: bool,
+    prelocking: bool,
 }
 
 impl Engine {
     pub fn new(sample_rate: f32) -> Self {
+        let detector = Detector::new(sample_rate);
+        let lookahead = Lookahead::new(sample_rate, detector.maximum_decision_age_samples());
+
         Self {
             mode: OperatingMode::Track,
             visualize: false,
-            detector: Detector::new(sample_rate),
+            detector,
             analyzer: Analyzer::new(sample_rate),
             estimate: Estimate::default(),
             sample_rate,
@@ -97,6 +105,10 @@ impl Engine {
             bypass: 0.0,
             control_alpha: 1.0 - (-1.0 / (0.01 * sample_rate)).exp(),
             peak_decay: (-1.0 / (0.3 * sample_rate)).exp(),
+            lookahead,
+            source_started: false,
+            detector_voiced: false,
+            prelocking: false,
         }
     }
 
@@ -116,6 +128,20 @@ impl Engine {
 
         self.input_peak = 0.0;
         self.output_peak = 0.0;
+        self.lookahead.reset();
+        self.source_started = false;
+        self.detector_voiced = false;
+        self.prelocking = false;
+    }
+
+    pub fn set_lookahead(&mut self, enabled: bool) {
+        if self.lookahead.set_enabled(enabled) {
+            self.reset();
+        }
+    }
+
+    pub fn latency_samples(&self) -> usize {
+        self.lookahead.latency_samples()
     }
 
     #[cfg(test)]
@@ -129,12 +155,16 @@ impl Engine {
         sidechain: Option<[f32; 2]>,
         controls: Controls,
     ) -> [f32; 2] {
+        let changed_source = self.mode != controls.mode || self.detector.mode != controls.detection;
+
+        if changed_source {
+            self.detector_voiced = false;
+        }
+
         if self.mode != controls.mode {
             self.mode = controls.mode;
             self.detector.reset();
-            self.estimate = Estimate::default();
         }
-        self.analyzer.push(input, self.visualize);
 
         let detection_input = match controls.mode {
             OperatingMode::Track => input,
@@ -144,14 +174,76 @@ impl Engine {
 
         self.detector.mode = controls.detection;
 
-        if self.detector.push(detection_input) {
-            self.detector.target = controls.target;
-            self.estimate = self.detector.analyze(controls.gate_db, controls.clarity);
+        let decision = if self.detector.push(detection_input) {
+            let analysis = self
+                .lookahead
+                .analysis_controls(self.detector.analysis_center_age_samples(), controls);
+            self.detector.target = analysis.target;
+            let estimate = self.detector.analyze(analysis.gate_db, analysis.clarity);
+            let acquiring = estimate.frequency > 0.0 && !self.detector_voiced;
+            self.detector_voiced = estimate.frequency > 0.0;
+            Some(
+                if let Some((start, center)) = self.detector.decision_ages() {
+                    Decision {
+                        dated: true,
+                        age: center,
+                        prelock_age: acquiring.then_some(start),
+                        estimate,
+                    }
+                } else {
+                    Decision {
+                        dated: false,
+                        age: 0,
+                        prelock_age: None,
+                        estimate,
+                    }
+                },
+            )
+        } else {
+            None
+        };
 
-            if self.estimate.frequency > 0.0 {
-                self.target_log_frequency = f64::from(self.estimate.frequency).ln();
+        let Some(frame) =
+            self.lookahead
+                .push(input, detection_input, controls, decision, changed_source)
+        else {
+            return [0.0; 2];
+        };
+        let input = frame.audio;
+        let controls = frame.controls;
+        self.analyzer.push(input, self.visualize);
+
+        if frame.prelock.is_none() {
+            self.prelocking = false;
+        } else if self.estimate.frequency == 0.0
+            && self.bands.iter().all(|band| band.wet == 0.0)
+            && frame.source_active
+        {
+            self.prelocking = true;
+        }
+
+        if let Some(estimate) = if self.prelocking {
+            frame.prelock
+        } else {
+            frame.estimate
+        } {
+            self.estimate = estimate;
+        }
+
+        if self.estimate.frequency > 0.0 {
+            self.target_log_frequency = f64::from(self.estimate.frequency).ln();
+
+            // No audible filter state exists while every band is fully dry.
+            // Initialize before Attack instead of sweeping from a placeholder.
+            if self.bands.iter().all(|band| band.wet == 0.0) {
+                self.log_frequency = self.target_log_frequency;
             }
         }
+
+        // Lookahead can know a pitch before the buffered source starts. Wait
+        // for its Gate crossing so Attack is not spent on preceding silence.
+        self.source_started =
+            self.estimate.frequency > 0.0 && (self.source_started || frame.source_active);
 
         if controls.tracking_ms != self.tracking_ms {
             self.tracking_ms = controls.tracking_ms;
@@ -188,7 +280,7 @@ impl Engine {
                 wet,
                 control,
                 self.frequency,
-                self.estimate.frequency > 0.0,
+                self.source_started,
                 self.sample_rate,
                 self.control_alpha,
                 self.envelope_steps,

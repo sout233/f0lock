@@ -18,6 +18,9 @@ use std::{
 #[path = "support/clap_gui.rs"]
 mod gui_tests;
 
+#[path = "support/clap_lookahead.rs"]
+mod lookahead_tests;
+
 fn bundle_path(relative: &str) -> std::path::PathBuf {
     let directory = std::env::var_os("F0LOCK_TEST_BUNDLE_DIR")
         .map(std::path::PathBuf::from)
@@ -97,6 +100,7 @@ unsafe fn saved_band_state_round_trip(
         };
 
         for (name, text) in [
+            ("Lookahead", "On"),
             ("Pitch Detection", "pYIN"),
             ("Operating Mode", "Sidechain EQ"),
             ("Sidechain Pitch Detection", "F0LOCK Ψ"),
@@ -215,8 +219,12 @@ unsafe fn saved_band_state_round_trip(
     }
 }
 
-unsafe extern "C" fn extension(_: *const clap_host, _: *const c_char) -> *const c_void {
-    ptr::null()
+unsafe extern "C" fn extension(_: *const clap_host, id: *const c_char) -> *const c_void {
+    if unsafe { CStr::from_ptr(id) } == clap_sys::ext::latency::CLAP_EXT_LATENCY {
+        (&lookahead_tests::HOST_LATENCY as *const clap_sys::ext::latency::clap_host_latency).cast()
+    } else {
+        ptr::null()
+    }
 }
 unsafe extern "C" fn notify(_: *const clap_host) {}
 unsafe extern "C" fn event_count(list: *const clap_input_events) -> u32 {
@@ -414,7 +422,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         assert_eq!(sidechain_info.channel_count, 2);
         assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 124);
+        assert_eq!(count, 125);
         let mut gain_id = None;
         let mut bypass_id = None;
 
@@ -489,6 +497,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         (*plugin).stop_processing.unwrap()(plugin);
         (*plugin).deactivate.unwrap()(plugin);
         saved_band_state_round_trip(plugin, params);
+        lookahead_tests::verify(plugin, params);
         (*plugin).destroy.unwrap()(plugin);
         entry.deinit.unwrap()();
     }

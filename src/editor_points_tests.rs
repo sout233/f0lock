@@ -547,6 +547,35 @@ fn header_menu_opens_audio_settings_and_about() {
 }
 
 #[test]
+fn lookahead_setting_uses_host_gestures_and_displays_the_reported_latency() {
+    let mut f = Fixture::new();
+    assert!(!f.editor.params.lookahead.value());
+    assert!(
+        f.editor
+            .params
+            .lookahead
+            .flags()
+            .contains(ParamFlags::NON_AUTOMATABLE)
+    );
+    f.click_text("Lookahead · Off");
+    assert!(f.editor.params.lookahead.value());
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+
+    f.editor
+        .telemetry
+        .latency_samples
+        .store(7200, std::sync::atomic::Ordering::Relaxed);
+    f.frame(vec![]);
+    assert!(f.shapes.iter().any(|s| matches!(&s.shape,
+        egui::Shape::Text(t) if t.galley.job.text == "Lookahead · 150 ms")));
+    f.click(Pos2::new(860.0, 32.0), egui::PointerButton::Primary);
+    f.click_text("Audio Settings");
+    f.frame(vec![]);
+    assert!(f.shapes.iter().any(|s| matches!(&s.shape,
+        egui::Shape::Text(t) if t.galley.job.text == "7200 samples (150.0 ms)")));
+}
+
+#[test]
 fn header_menu_changes_ui_scale_without_editing_audio_parameters() {
     let mut f = Fixture::new();
     f.click(Pos2::new(860.0, 32.0), egui::PointerButton::Primary);

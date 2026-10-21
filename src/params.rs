@@ -17,6 +17,9 @@ pub struct F0Params {
     #[id = "bypass"]
     pub bypass: BoolParam,
 
+    #[id = "lookahead"]
+    pub lookahead: BoolParam,
+
     #[persist = "ui_scale_percent"]
     pub ui_scale_percent: AtomicU32,
 
@@ -32,6 +35,7 @@ impl Default for F0Params {
         Self {
             mode: EnumParam::new("Operating Mode", OperatingMode::Track),
             bypass: BoolParam::new("Bypass", false).make_bypass(),
+            lookahead: BoolParam::new("Lookahead", false).non_automatable(),
             ui_scale_percent: AtomicU32::new(100),
             track: ProcessingParams::new(""),
             sidechain: ProcessingParams::new("Sidechain "),

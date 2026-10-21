@@ -29,8 +29,9 @@ the intended lead from octave harmonies or overlapping partials. Clarity is a
 spectral evidence score, not calibrated accuracy or MPM periodicity.
 
 At 48 kHz, the analysis window spans about 85 ms and lookahead adds 32 ms.
-Tracking and Attack also affect response. The audio path has no added alignment
-delay. Gate, Clarity, Tracking and Attack / Release remain active.
+Tracking and Attack also affect response. Optional [Lookahead](lookahead.md)
+adds audio alignment delay; it is off by default. Gate, Clarity, Tracking and
+Attack / Release remain active.
 
 ## Validation
 

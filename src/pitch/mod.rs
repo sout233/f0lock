@@ -74,6 +74,7 @@ impl DetectionMode {
 }
 
 pub struct PitchTracking {
+    pub decision_ready: bool,
     mode: DetectionMode,
     target: Target,
     yin: YinDetector<f32>,
@@ -87,6 +88,7 @@ pub struct PitchTracking {
 impl PitchTracking {
     pub fn new(rate: f32, window: usize, hop: usize) -> Self {
         Self {
+            decision_ready: false,
             mode: DetectionMode::default(),
             target: Target::default(),
             yin: YinDetector::new(window, window / 2).expect("Invalid pYIN window"),
@@ -99,6 +101,7 @@ impl PitchTracking {
     }
 
     pub fn reset(&mut self) {
+        self.decision_ready = false;
         self.tracker.reset();
         self.melody_tracker.reset();
     }
@@ -150,6 +153,7 @@ impl PitchTracking {
         target.apply_preference(&mut self.observations);
 
         if self.mode == DetectionMode::Mpm {
+            self.decision_ready = true;
             let best = (0..BINS)
                 .filter(|&i| {
                     self.observations.probability[i] > 0.0
@@ -171,12 +175,20 @@ impl PitchTracking {
         } else {
             0
         };
-        let (frequency, clarity) = if self.mode == DetectionMode::SpectralMelody {
-            self.melody_tracker
-                .process(&self.observations, threshold, lag)
+        let (result, ready) = if self.mode == DetectionMode::SpectralMelody {
+            (
+                self.melody_tracker
+                    .process(&self.observations, threshold, lag),
+                self.melody_tracker.frames > lag,
+            )
         } else {
-            self.tracker.process(&self.observations, threshold, lag)
+            (
+                self.tracker.process(&self.observations, threshold, lag),
+                self.tracker.frames > lag,
+            )
         };
+        let (frequency, clarity) = result;
+        self.decision_ready = ready;
         // A delayed decision may predate an automated range change.
         // Keep its trajectory, but never emit a now-excluded pending pitch.
         if target.mode != TargetMode::Auto && !target.allows(frequency) {

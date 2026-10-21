@@ -4,12 +4,15 @@ mod detector;
 mod editor;
 mod engine;
 mod filter;
+mod lookahead;
 mod mode;
 #[cfg(test)]
 mod multiband_tests;
 
 #[cfg(test)]
 mod envelope_tests;
+#[cfg(test)]
+mod lookahead_tests;
 mod params;
 mod pitch;
 mod realtime;
@@ -33,6 +36,7 @@ use std::sync::{
 };
 
 pub(crate) struct Telemetry {
+    latency_samples: AtomicU32,
     audio_channels: AtomicU32,
     buffer_samples: AtomicU32,
     values: [AtomicU32; 10],
@@ -43,6 +47,7 @@ pub(crate) struct Telemetry {
 impl Default for Telemetry {
     fn default() -> Self {
         Self {
+            latency_samples: AtomicU32::new(0),
             audio_channels: AtomicU32::new(0),
             buffer_samples: AtomicU32::new(0),
             values: std::array::from_fn(|_| AtomicU32::new(0)),
@@ -54,6 +59,8 @@ impl Default for Telemetry {
 
 impl Telemetry {
     fn publish(&self, e: &Engine) {
+        self.latency_samples
+            .store(e.latency_samples() as u32, Ordering::Relaxed);
         for (destination, source) in self.bands.iter().zip(&e.bands) {
             for (atomic, value) in destination.iter().zip(source.values()) {
                 atomic.store(value.to_bits(), Ordering::Relaxed);
@@ -195,8 +202,9 @@ impl Plugin for F0Lock {
         }
 
         self.engine = Engine::new(config.sample_rate);
+        self.engine.set_lookahead(self.params.lookahead.value());
         self.telemetry.publish(&self.engine);
-        context.set_latency_samples(0);
+        context.set_latency_samples(self.engine.latency_samples() as u32);
         true
     }
 
@@ -209,9 +217,15 @@ impl Plugin for F0Lock {
         &mut self,
         buffer: &mut Buffer,
         auxiliary: &mut AuxiliaryBuffers,
-        _: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let _denormal_guard = realtime::DenormalGuard::new();
+        let old_latency = self.engine.latency_samples();
+        self.engine.set_lookahead(self.params.lookahead.value());
+
+        if old_latency != self.engine.latency_samples() {
+            context.set_latency_samples(self.engine.latency_samples() as u32);
+        }
         self.telemetry
             .audio_channels
             .store(buffer.channels() as u32, Ordering::Relaxed);
@@ -293,7 +307,11 @@ impl Plugin for F0Lock {
             self.repaint.request_repaint();
         }
 
-        ProcessStatus::Normal
+        if self.engine.latency_samples() > 0 {
+            ProcessStatus::Tail(self.engine.latency_samples() as u32)
+        } else {
+            ProcessStatus::Normal
+        }
     }
 }
 

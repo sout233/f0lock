@@ -107,6 +107,7 @@ impl F0Editor {
         let gui = &self.gui;
         let channels = self.telemetry.audio_channels.load(Ordering::Relaxed);
         let buffer = self.telemetry.buffer_samples.load(Ordering::Relaxed);
+        let latency = self.telemetry.latency_samples.load(Ordering::Relaxed);
 
         egui::Window::new("Audio Settings")
             .open(&mut self.audio_open)
@@ -151,7 +152,16 @@ impl F0Editor {
                         ui.end_row();
 
                         ui.label("Latency");
-                        ui.label("0 samples");
+                        ui.label(if latency == 0 {
+                            "0 samples".into()
+                        } else if v[7] > 0.0 {
+                            format!(
+                                "{latency} samples ({:.1} ms)",
+                                latency as f32 * 1000.0 / v[7]
+                            )
+                        } else {
+                            format!("{latency} samples")
+                        });
                         ui.end_row();
                     });
 

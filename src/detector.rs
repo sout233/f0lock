@@ -1,5 +1,5 @@
 use crate::filter::{Coefficients, Svf};
-use crate::pitch::{DetectionMode, PitchTracking, Target, TargetMode};
+use crate::pitch::{DetectionMode, LOOKAHEAD, PitchTracking, Target, TargetMode};
 use pitch_estimate::{McLeodDetector, PitchDetector};
 
 pub const WINDOW: usize = 1024;
@@ -28,6 +28,9 @@ pub struct Detector {
     position: usize,
     filled: usize,
     hop: usize,
+    samples_seen: u64,
+    decision_ready: bool,
+    decision_lag: usize,
     mpm: McLeodDetector<f32>,
     frame: [f32; WINDOW],
 }
@@ -62,6 +65,9 @@ impl Detector {
             position: 0,
             filled: 0,
             hop: 0,
+            samples_seen: 0,
+            decision_ready: false,
+            decision_lag: 0,
             mpm,
             frame: [0.0; WINDOW],
         }
@@ -78,6 +84,24 @@ impl Detector {
         self.phase = 0;
 
         self.hop = 0;
+        self.samples_seen = 0;
+        self.decision_ready = false;
+    }
+
+    pub fn maximum_decision_age_samples(&self) -> usize {
+        (WINDOW + LOOKAHEAD * HOP) * self.decimation - 1
+    }
+
+    /// Start and center ages of the returned analysis window. Delayed
+    /// decoders describe a window three hops behind the newest one.
+    pub fn decision_ages(&self) -> Option<(usize, usize)> {
+        let age = (WINDOW + self.decision_lag * HOP) * self.decimation - 1;
+        (self.decision_ready && self.samples_seen > age as u64)
+            .then_some((age, age - WINDOW * self.decimation / 2))
+    }
+
+    pub fn analysis_center_age_samples(&self) -> usize {
+        WINDOW * self.decimation / 2 - 1
     }
 
     pub fn push(&mut self, samples: [f32; 2]) -> bool {
@@ -85,6 +109,8 @@ impl Detector {
             self.reset();
             self.configured_mode = self.mode;
         }
+
+        self.samples_seen += 1;
 
         // Periodicity modes retain their 1 kHz path; harmonic salience uses
         // wider anti-alias filtering. Independent channels avoid cancellation.
@@ -132,6 +158,8 @@ impl Detector {
     }
 
     pub fn analyze(&mut self, gate_db: f32, threshold: f32) -> Estimate {
+        self.decision_ready = true;
+        self.decision_lag = 0;
         self.tracking.set_mode(self.mode);
         let means: [f32; 2] =
             std::array::from_fn(|ch| self.rings[ch].iter().sum::<f32>() / WINDOW as f32);
@@ -162,6 +190,15 @@ impl Detector {
                 threshold,
                 self.target,
             );
+            self.decision_ready = self.tracking.decision_ready;
+            self.decision_lag = if matches!(
+                self.mode,
+                DetectionMode::Pyin | DetectionMode::SpectralMelody
+            ) {
+                LOOKAHEAD
+            } else {
+                0
+            };
 
             return Estimate {
                 frequency,

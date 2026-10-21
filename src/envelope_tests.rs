@@ -66,7 +66,8 @@ fn losing_pitch_freezes_frequency_while_release_continues_processing_audio() {
     };
 
     for i in 0..24000 {
-        let x = 0.02 * (TAU * 660.0 * i as f32 / 48000.0).sin();
+        let hz = if i < 12000 { 440.0 } else { 660.0 };
+        let x = 0.02 * (TAU * hz * i as f32 / 48000.0).sin();
         engine.process([x; 2], controls);
     }
 
