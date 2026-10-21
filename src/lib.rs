@@ -4,6 +4,7 @@ mod detector;
 mod editor;
 mod engine;
 mod filter;
+mod mode;
 #[cfg(test)]
 mod multiband_tests;
 
@@ -13,11 +14,14 @@ mod params;
 mod pitch;
 mod realtime;
 #[cfg(test)]
+mod sidechain_tests;
+#[cfg(test)]
 mod spectrum_tests;
 #[cfg(test)]
 mod tests;
 
 use engine::{Controls, Engine};
+use mode::OperatingMode;
 use nice_plug::{editor::dpi::LogicalSize, prelude::*};
 use nice_plug_egui::{
     EguiEditor, EguiEditorState, EguiNiceSettings, RepaintNotifier, create_egui_editor,
@@ -123,6 +127,26 @@ impl Plugin for F0Lock {
         AudioIOLayout {
             main_input_channels: NonZeroU32::new(2),
             main_output_channels: NonZeroU32::new(2),
+            aux_input_ports: &[new_nonzero_u32(2)],
+            names: PortNames {
+                aux_inputs: &["Sidechain"],
+                ..PortNames::const_default()
+            },
+            ..AudioIOLayout::const_default()
+        },
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(1),
+            main_output_channels: NonZeroU32::new(1),
+            aux_input_ports: &[new_nonzero_u32(1)],
+            names: PortNames {
+                aux_inputs: &["Sidechain"],
+                ..PortNames::const_default()
+            },
+            ..AudioIOLayout::const_default()
+        },
+        AudioIOLayout {
+            main_input_channels: NonZeroU32::new(2),
+            main_output_channels: NonZeroU32::new(2),
             ..AudioIOLayout::const_default()
         },
         AudioIOLayout {
@@ -184,7 +208,7 @@ impl Plugin for F0Lock {
     fn process(
         &mut self,
         buffer: &mut Buffer,
-        _: &mut AuxiliaryBuffers,
+        auxiliary: &mut AuxiliaryBuffers,
         _: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let _denormal_guard = realtime::DenormalGuard::new();
@@ -197,18 +221,29 @@ impl Plugin for F0Lock {
 
         self.engine.visualize = self.editor_state.is_open();
 
-        for mut frame in buffer.iter_samples() {
+        let sidechain = auxiliary.inputs.first();
+        if let Some(sidechain) = sidechain {
+            if sidechain.samples() != buffer.samples() || !(1..=2).contains(&sidechain.channels()) {
+                return ProcessStatus::Error("f0lock: invalid sidechain buffer layout");
+            }
+        }
+        let sidechain = sidechain.map(Buffer::as_slice_immutable);
+
+        for (index, mut frame) in buffer.iter_samples().enumerate() {
+            let mode = self.params.mode.value();
+            let params = self.params.for_mode(mode);
             let controls = Controls {
-                bands: std::array::from_fn(|i| self.params.band(i).control()),
-                detection: self.params.detection.value(),
-                target: self.params.target(),
-                tracking_ms: self.params.tracking.value(),
-                attack_ms: self.params.attack.value(),
-                release_ms: self.params.release.value(),
-                clarity: self.params.clarity.value(),
-                gate_db: self.params.gate.value(),
-                mix: self.params.mix.value() * 0.01,
-                output_db: self.params.output.value(),
+                mode,
+                bands: std::array::from_fn(|i| params.band(i).control()),
+                detection: params.detection.value(),
+                target: params.target(),
+                tracking_ms: params.tracking.value(),
+                attack_ms: params.attack.value(),
+                release_ms: params.release.value(),
+                clarity: params.clarity.value(),
+                gate_db: params.gate.value(),
+                mix: params.mix.value() * 0.01,
+                output_db: params.output.value(),
                 bypass: self.params.bypass.value(),
             };
 
@@ -223,7 +258,26 @@ impl Plugin for F0Lock {
                 return ProcessStatus::Error("f0lock: non-finite audio input");
             }
 
-            let output = self.engine.process([left, right], controls);
+            let detection_input = sidechain.map(|channels| {
+                let left = channels[0][index];
+                [
+                    left,
+                    if channels.len() == 2 {
+                        channels[1][index]
+                    } else {
+                        left
+                    },
+                ]
+            });
+            if controls.mode == OperatingMode::Sidechain
+                && detection_input
+                    .is_some_and(|samples| samples.iter().any(|sample| !sample.is_finite()))
+            {
+                return ProcessStatus::Error("f0lock: non-finite sidechain input");
+            }
+            let output =
+                self.engine
+                    .process_with_sidechain([left, right], detection_input, controls);
 
             if output.iter().any(|sample| !sample.is_finite()) {
                 return ProcessStatus::Error("f0lock: non-finite DSP output");

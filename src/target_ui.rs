@@ -44,9 +44,9 @@ impl F0Editor {
                     )
                     .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
                 let param = match target.mode {
-                    TargetMode::Range if edge == "minimum" => &self.params.target_min,
-                    TargetMode::Range => &self.params.target_max,
-                    TargetMode::Reference => &self.params.target_tolerance,
+                    TargetMode::Range if edge == "minimum" => &self.params.active().target_min,
+                    TargetMode::Range => &self.params.active().target_max,
+                    TargetMode::Reference => &self.params.active().target_tolerance,
                     TargetMode::Auto => unreachable!(),
                 };
 
@@ -110,7 +110,7 @@ impl F0Editor {
                     .on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
 
                 if response.drag_started() {
-                    setter.begin_set_parameter(&self.params.target_reference);
+                    setter.begin_set_parameter(&self.params.active().target_reference);
                 }
 
                 if response.dragged() {
@@ -118,13 +118,13 @@ impl F0Editor {
                         .interact_pointer_pos()
                         .expect("Reference drag without pointer");
                     setter.set_parameter(
-                        &self.params.target_reference,
+                        &self.params.active().target_reference,
                         hz(pointer.x).clamp(50.0, 1000.0),
                     );
                 }
 
                 if response.drag_stopped() {
-                    setter.end_set_parameter(&self.params.target_reference);
+                    setter.end_set_parameter(&self.params.active().target_reference);
                 }
 
                 p.line_segment(
@@ -157,12 +157,12 @@ impl F0Editor {
                                     .selectable_label(target.mode == mode, mode.label())
                                     .clicked()
                                 {
-                                    set_value(&setter, &self.params.target_mode, mode);
+                                    set_value(&setter, &self.params.active().target_mode, mode);
                                 }
                             }
                         });
 
-                        let mode = self.params.target_mode.value();
+                        let mode = self.params.active().target_mode.value();
                         if mode == TargetMode::Auto {
                             return;
                         }
@@ -173,13 +173,13 @@ impl F0Editor {
                             .show(ui, |ui| {
                                 let fields = if mode == TargetMode::Range {
                                     [
-                                        (&self.params.target_min, "Minimum"),
-                                        (&self.params.target_max, "Maximum"),
+                                        (&self.params.active().target_min, "Minimum"),
+                                        (&self.params.active().target_max, "Maximum"),
                                     ]
                                 } else {
                                     [
-                                        (&self.params.target_reference, "Reference Hz"),
-                                        (&self.params.target_tolerance, "Tolerance ±"),
+                                        (&self.params.active().target_reference, "Reference Hz"),
+                                        (&self.params.active().target_tolerance, "Tolerance ±"),
                                     ]
                                 };
 
@@ -191,7 +191,8 @@ impl F0Editor {
                             });
 
                         if mode == TargetMode::Range
-                            && self.params.target_min.value() > self.params.target_max.value()
+                            && self.params.active().target_min.value()
+                                > self.params.active().target_max.value()
                         {
                             ui.colored_label(RED, "Minimum exceeds maximum");
                         }

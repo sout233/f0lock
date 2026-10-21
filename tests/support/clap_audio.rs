@@ -19,6 +19,8 @@ pub(super) fn run(plugin_address: usize, stop: Arc<AtomicBool>) -> u64 {
     while !stop.load(Ordering::Acquire) {
         let mut left = [0.0_f32; 512];
         let mut right = [0.0_f32; 512];
+        let mut sc_left = [0.0_f32; 512];
+        let mut sc_right = [0.0_f32; 512];
         let mut output_left = [f32::NAN; 512];
         let mut output_right = [f32::NAN; 512];
 
@@ -30,6 +32,7 @@ pub(super) fn run(plugin_address: usize, stop: Arc<AtomicBool>) -> u64 {
         }
 
         let mut inputs = [left.as_mut_ptr(), right.as_mut_ptr()];
+        let mut sidechain = [sc_left.as_mut_ptr(), sc_right.as_mut_ptr()];
         let mut outputs = [output_left.as_mut_ptr(), output_right.as_mut_ptr()];
         let input = clap_audio_buffer {
             data32: inputs.as_mut_ptr(),
@@ -42,13 +45,20 @@ pub(super) fn run(plugin_address: usize, stop: Arc<AtomicBool>) -> u64 {
             data32: outputs.as_mut_ptr(),
             ..input
         };
+        let inputs = [
+            input,
+            clap_audio_buffer {
+                data32: sidechain.as_mut_ptr(),
+                ..input
+            },
+        ];
         let process = clap_process {
             steady_time: total as i64,
             frames_count: 512,
             transport: ptr::null(),
-            audio_inputs: &input,
+            audio_inputs: inputs.as_ptr(),
             audio_outputs: &mut output,
-            audio_inputs_count: 1,
+            audio_inputs_count: 2,
             audio_outputs_count: 1,
             in_events: &events,
             out_events: &output_events,

@@ -60,10 +60,13 @@ impl F0Editor {
 
                     for mode in DetectionMode::ALL {
                         if ui
-                            .selectable_label(self.params.detection.value() == mode, mode.label())
+                            .selectable_label(
+                                self.params.active().detection.value() == mode,
+                                mode.label(),
+                            )
                             .clicked()
                         {
-                            set_value(&setter, &self.params.detection, mode);
+                            set_value(&setter, &self.params.active().detection, mode);
                             egui::Popup::close_all(ui.ctx());
                         }
                     }
@@ -132,6 +135,13 @@ impl F0Editor {
                         });
                         ui.end_row();
 
+                        ui.label("Detection Input");
+                        ui.label(match params.mode.value() {
+                            crate::mode::OperatingMode::Track => "Main input",
+                            crate::mode::OperatingMode::Sidechain => "External sidechain",
+                        });
+                        ui.end_row();
+
                         ui.label("Buffer");
                         ui.label(if buffer > 0 {
                             format!("{buffer} samples")
@@ -167,11 +177,51 @@ impl F0Editor {
                     .spacing([24.0, 8.0])
                     .show(ui, |ui| {
                         for (param, label, min, max, speed, unit, factor) in [
-                            (&params.tracking, "Tracking", 5.0, 300.0, 1.0, " ms", 1.0),
-                            (&params.attack, "Attack", 0.1, 300.0, 0.1, " ms", 1.0),
-                            (&params.release, "Release", 1.0, 2000.0, 1.0, " ms", 1.0),
-                            (&params.gate, "Gate", -80.0, -20.0, 0.1, " dBFS", 1.0),
-                            (&params.clarity, "Clarity", 50.0, 99.0, 0.1, " %", 100.0),
+                            (
+                                &params.active().tracking,
+                                "Tracking",
+                                5.0,
+                                300.0,
+                                1.0,
+                                " ms",
+                                1.0,
+                            ),
+                            (
+                                &params.active().attack,
+                                "Attack",
+                                0.1,
+                                300.0,
+                                0.1,
+                                " ms",
+                                1.0,
+                            ),
+                            (
+                                &params.active().release,
+                                "Release",
+                                1.0,
+                                2000.0,
+                                1.0,
+                                " ms",
+                                1.0,
+                            ),
+                            (
+                                &params.active().gate,
+                                "Gate",
+                                -80.0,
+                                -20.0,
+                                0.1,
+                                " dBFS",
+                                1.0,
+                            ),
+                            (
+                                &params.active().clarity,
+                                "Clarity",
+                                50.0,
+                                99.0,
+                                0.1,
+                                " %",
+                                100.0,
+                            ),
                         ] {
                             ui.label(label);
                             let mut value = param.value() * factor;

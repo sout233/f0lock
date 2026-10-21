@@ -2,11 +2,13 @@ use crate::{
     analyzer::Analyzer,
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
+    mode::OperatingMode,
     pitch::{DetectionMode, Target},
 };
 
 #[derive(Clone, Copy)]
 pub struct Controls {
+    pub mode: OperatingMode,
     pub detection: DetectionMode,
     pub target: Target,
     pub bands: [BandControl; BAND_COUNT],
@@ -27,6 +29,7 @@ impl Default for Controls {
         bands[0].gain = -6.0;
 
         Self {
+            mode: OperatingMode::Track,
             detection: DetectionMode::Mpm,
             target: Target::default(),
             bands,
@@ -43,6 +46,7 @@ impl Default for Controls {
 }
 
 pub struct Engine {
+    pub mode: OperatingMode,
     pub visualize: bool,
     pub detector: Detector,
     pub analyzer: Analyzer,
@@ -70,6 +74,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(sample_rate: f32) -> Self {
         Self {
+            mode: OperatingMode::Track,
             visualize: false,
             detector: Detector::new(sample_rate),
             analyzer: Analyzer::new(sample_rate),
@@ -113,10 +118,31 @@ impl Engine {
         self.output_peak = 0.0;
     }
 
+    #[cfg(test)]
     pub fn process(&mut self, input: [f32; 2], controls: Controls) -> [f32; 2] {
+        self.process_with_sidechain(input, None, controls)
+    }
+
+    pub fn process_with_sidechain(
+        &mut self,
+        input: [f32; 2],
+        sidechain: Option<[f32; 2]>,
+        controls: Controls,
+    ) -> [f32; 2] {
+        if self.mode != controls.mode {
+            self.mode = controls.mode;
+            self.detector.reset();
+            self.estimate = Estimate::default();
+        }
         self.analyzer.push(input, self.visualize);
 
-        if self.detector.push(input) {
+        let detection_input = match controls.mode {
+            OperatingMode::Track => input,
+            // An unrouted external bus is silence, never a main-input detector.
+            OperatingMode::Sidechain => sidechain.unwrap_or([0.0; 2]),
+        };
+
+        if self.detector.push(detection_input) {
             self.detector.mode = controls.detection;
             self.detector.target = controls.target;
             self.estimate = self.detector.analyze(controls.gate_db, controls.clarity);

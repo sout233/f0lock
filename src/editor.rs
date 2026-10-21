@@ -13,6 +13,8 @@ mod controls;
 mod credits;
 #[path = "knob.rs"]
 mod knob;
+#[path = "mode_ui.rs"]
+mod mode_ui;
 #[path = "point_tabs.rs"]
 mod point_tabs;
 #[path = "settings.rs"]
@@ -45,6 +47,8 @@ pub struct F0Editor {
     about_open: bool,
     about_credits: bool,
     credits_image: Option<egui::TextureHandle>,
+    shown_mode: crate::mode::OperatingMode,
+    mode_selection: [Option<usize>; 2],
     audio_open: bool,
 }
 
@@ -69,6 +73,7 @@ const PREVIEW_F0: f32 = 150.0;
 impl F0Editor {
     pub(crate) fn new(params: Arc<F0Params>, telemetry: Arc<Telemetry>) -> Self {
         let selected = (0..BAND_COUNT).find(|&i| params.band(i).exists.value());
+        let shown_mode = params.mode.value();
         Self {
             params,
             telemetry,
@@ -79,11 +84,21 @@ impl F0Editor {
             about_open: false,
             about_credits: false,
             credits_image: None,
+            shown_mode,
+            mode_selection: [Some(0); 2],
             audio_open: false,
         }
     }
 
     pub(crate) fn draw(&mut self, ui: &mut egui::Ui) {
+        let mode = self.params.mode.value();
+        if mode != self.shown_mode {
+            self.mode_selection[self.shown_mode as usize] = self.selected;
+            self.selected = self.mode_selection[mode as usize];
+            self.shown_mode = mode;
+            self.context_point = None;
+            self.notice = None;
+        }
         if let Err(error) = self.restore_ui_scale(ui.ctx()) {
             ui.colored_label(RED, error.to_string());
             return;
@@ -154,6 +169,7 @@ impl F0Editor {
             self.about_open = true;
         }
 
+        self.mode_button(ui, canvas);
         level_bar(&p, at(609.0, 25.0), v[5]);
         level_bar(&p, at(609.0, 36.0), v[6]);
 

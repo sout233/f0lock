@@ -4,7 +4,10 @@ use clap_sys::{
     audio_buffer::*, entry::*, events::*, ext::params::*, factory::plugin_factory::*, host::*,
     plugin::*, process::*, version::*,
 };
-use clap_sys::{ext::state::*, stream::*};
+use clap_sys::{
+    ext::{audio_ports::*, state::*},
+    stream::*,
+};
 use std::io::{Cursor, Read};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
@@ -20,6 +23,35 @@ fn bundle_path(relative: &str) -> std::path::PathBuf {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/bundled"));
     directory.join(relative)
+}
+
+unsafe fn text_event(
+    plugin: *const clap_plugin,
+    params: *const clap_plugin_params,
+    name: &str,
+    text: &str,
+) -> (u32, f64) {
+    unsafe {
+        let mut selected = None;
+        for i in 0..(*params).count.unwrap()(plugin) {
+            let mut info = std::mem::zeroed::<clap_param_info>();
+            assert!((*params).get_info.unwrap()(plugin, i, &mut info));
+            if CStr::from_ptr(info.name.as_ptr()).to_str().unwrap() == name {
+                assert!(selected.is_none(), "Duplicate parameter name: {name}");
+                selected = Some(info.id);
+            }
+        }
+        let id = selected.unwrap_or_else(|| panic!("Missing parameter: {name}"));
+        let text = CString::new(text).unwrap();
+        let mut value = 0.0;
+        assert!((*params).text_to_value.unwrap()(
+            plugin,
+            id,
+            text.as_ptr(),
+            &mut value
+        ));
+        (id, value)
+    }
 }
 
 unsafe extern "C" fn write_state(
@@ -66,6 +98,13 @@ unsafe fn saved_band_state_round_trip(
 
         for (name, text) in [
             ("Pitch Detection", "pYIN"),
+            ("Operating Mode", "Sidechain EQ"),
+            ("Sidechain Pitch Detection", "pYIN"),
+            ("Sidechain F0 gain", "-9 dB"),
+            ("Sidechain F0 ratio", "3"),
+            ("Sidechain Target Mode", "Range"),
+            ("Sidechain Target Minimum", "150 Hz"),
+            ("Sidechain Attack", "33 ms"),
             ("Target Mode", "Reference"),
             ("Target Minimum", "150 Hz"),
             ("Target Maximum", "700 Hz"),
@@ -202,6 +241,14 @@ unsafe extern "C" fn output_push(
 
 /// Supply a real tone in variable-size host buffers and measure the steady-state result.
 unsafe fn render(plugin: *const clap_plugin, gain_event: Option<(u32, f64)>) -> f64 {
+    unsafe { render_with_sidechain(plugin, gain_event, Some(110.0)) }
+}
+
+unsafe fn render_with_sidechain(
+    plugin: *const clap_plugin,
+    gain_event: Option<(u32, f64)>,
+    sidechain_hz: Option<f32>,
+) -> f64 {
     let mut event = gain_event.map(|(param_id, value)| clap_event_param_value {
         header: clap_event_header {
             size: size_of::<clap_event_param_value>() as u32,
@@ -241,15 +288,23 @@ unsafe fn render(plugin: *const clap_plugin, gain_event: Option<(u32, f64)>) -> 
         let frames = [1, 64, 127, 256, 511][block % 5].min(48000 - total);
         let mut left = [0.0_f32; 512];
         let mut right = [0.0_f32; 512];
+        let mut sc_left = [0.0_f32; 512];
+        let mut sc_right = [0.0_f32; 512];
         let mut out_left = [f32::NAN; 512];
         let mut out_right = [f32::NAN; 512];
 
         for i in 0..frames {
             left[i] = 0.1 * (std::f32::consts::TAU * 220.0 * (total + i) as f32 / 48000.0).sin();
             right[i] = -left[i];
+            if let Some(hz) = sidechain_hz {
+                sc_left[i] =
+                    0.2 * (std::f32::consts::TAU * hz * (total + i) as f32 / 48000.0).sin();
+                sc_right[i] = -sc_left[i];
+            }
         }
 
         let mut inputs = [left.as_mut_ptr(), right.as_mut_ptr()];
+        let mut sidechain = [sc_left.as_mut_ptr(), sc_right.as_mut_ptr()];
         let mut outputs = [out_left.as_mut_ptr(), out_right.as_mut_ptr()];
         let input = clap_audio_buffer {
             data32: inputs.as_mut_ptr(),
@@ -258,6 +313,13 @@ unsafe fn render(plugin: *const clap_plugin, gain_event: Option<(u32, f64)>) -> 
             latency: 0,
             constant_mask: 0,
         };
+        let inputs = [
+            input,
+            clap_audio_buffer {
+                data32: sidechain.as_mut_ptr(),
+                ..input
+            },
+        ];
 
         let mut output = clap_audio_buffer {
             data32: outputs.as_mut_ptr(),
@@ -271,9 +333,9 @@ unsafe fn render(plugin: *const clap_plugin, gain_event: Option<(u32, f64)>) -> 
             steady_time: total as i64,
             frames_count: frames as u32,
             transport: ptr::null(),
-            audio_inputs: &input,
+            audio_inputs: inputs.as_ptr(),
             audio_outputs: &mut output,
-            audio_inputs_count: 1,
+            audio_inputs_count: 2,
             audio_outputs_count: 1,
             in_events: &events,
             out_events: &output_events,
@@ -343,8 +405,16 @@ fn packaged_clap_processes_and_accepts_host_automation() {
             .cast::<clap_plugin_params>();
 
         assert!(!params.is_null());
+        let ports = (*plugin).get_extension.unwrap()(plugin, CLAP_EXT_AUDIO_PORTS.as_ptr())
+            .cast::<clap_plugin_audio_ports>();
+        assert_eq!((*ports).count.unwrap()(plugin, true), 2);
+        assert_eq!((*ports).count.unwrap()(plugin, false), 1);
+        let mut sidechain_info = std::mem::zeroed::<clap_audio_port_info>();
+        assert!((*ports).get.unwrap()(plugin, 1, true, &mut sidechain_info));
+        assert_eq!(sidechain_info.channel_count, 2);
+        assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 62);
+        assert_eq!(count, 124);
         let mut gain_id = None;
         let mut bypass_id = None;
 
@@ -382,6 +452,39 @@ fn packaged_clap_processes_and_accepts_host_automation() {
 
         println!(
             "Loaded CLAP: default {cut:.3} dB, automated {boost:.3} dB, bypass {bypass:.6} dB"
+        );
+        render(plugin, Some(text_event(plugin, params, "Bypass", "Off")));
+        render(
+            plugin,
+            Some(text_event(plugin, params, "Sidechain F0 gain", "-12 dB")),
+        );
+        render(
+            plugin,
+            Some(text_event(plugin, params, "Sidechain F0 ratio", "2")),
+        );
+        let sidechain = render(
+            plugin,
+            Some(text_event(plugin, params, "Operating Mode", "Sidechain EQ")),
+        );
+        assert!(
+            (sidechain + 12.0).abs() < 0.1,
+            "External sidechain routing: {sidechain} dB"
+        );
+        let no_sidechain = render_with_sidechain(plugin, None, None);
+        assert!(
+            no_sidechain.abs() < 0.001,
+            "Silent sidechain used main input: {no_sidechain} dB"
+        );
+        let track = render(
+            plugin,
+            Some(text_event(plugin, params, "Operating Mode", "Track EQ")),
+        );
+        assert!(
+            (track - 12.0).abs() < 0.1,
+            "Track bank was overwritten: {track} dB"
+        );
+        println!(
+            "External sidechain: {sidechain:.3} dB, silent sidechain {no_sidechain:.3} dB, restored Track EQ {track:.3} dB"
         );
         (*plugin).stop_processing.unwrap()(plugin);
         (*plugin).deactivate.unwrap()(plugin);

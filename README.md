@@ -4,6 +4,18 @@ fundamental-tracking dynamic EQ built on nice-plug
 
 ![interface](docs/screenshot.png)
 
+## modes
+
+Use the header's mode button to switch between **Track EQ** and **Sidechain EQ**.
+Track EQ follows the main input's pitch. Sidechain EQ follows an external
+sidechain and applies the EQ to the main input; route the reference track to
+the plugin's **Sidechain** input in your host. The spectrum always shows the
+main input. Each mode saves its own EQ points, Target and processing settings.
+
+Sidechain EQ uses the configured gain, with Attack and Release controlling
+engagement. It is not a level-dependent compressor. An absent or silent
+sidechain releases the EQ and displays “Waiting for sidechain pitch”.
+
 ## building & installing
 
 Install Rust and your platform's native build tools (MSVC on Windows).

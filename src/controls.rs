@@ -99,7 +99,7 @@ impl F0Editor {
                 self.accent(),
             ),
             (
-                &self.params.tracking,
+                &self.params.active().tracking,
                 "Tracking",
                 65.0,
                 602.0,
@@ -108,7 +108,7 @@ impl F0Editor {
                 GLOBAL_ACCENT,
             ),
             (
-                &self.params.attack,
+                &self.params.active().attack,
                 "Attack",
                 435.0,
                 602.0,
@@ -117,7 +117,7 @@ impl F0Editor {
                 GLOBAL_ACCENT,
             ),
             (
-                &self.params.release,
+                &self.params.active().release,
                 "Release",
                 545.0,
                 602.0,
@@ -126,7 +126,7 @@ impl F0Editor {
                 GLOBAL_ACCENT,
             ),
             (
-                &self.params.gate,
+                &self.params.active().gate,
                 "Gate",
                 175.0,
                 602.0,
@@ -135,7 +135,7 @@ impl F0Editor {
                 GLOBAL_ACCENT,
             ),
             (
-                &self.params.clarity,
+                &self.params.active().clarity,
                 "Clarity",
                 285.0,
                 602.0,
@@ -144,7 +144,7 @@ impl F0Editor {
                 GLOBAL_ACCENT,
             ),
             (
-                &self.params.mix,
+                &self.params.active().mix,
                 "Mix",
                 715.0,
                 602.0,
@@ -153,7 +153,7 @@ impl F0Editor {
                 GLOBAL_ACCENT,
             ),
             (
-                &self.params.output,
+                &self.params.active().output,
                 "Output",
                 825.0,
                 602.0,

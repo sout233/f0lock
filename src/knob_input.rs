@@ -14,7 +14,7 @@ pub(super) fn value_text(param: &FloatParam, normalized: f32, label: &str) -> St
 
     if label == "F0 Ratio" {
         format!("× {value:.2}")
-    } else if param.name() == "Clarity" {
+    } else if label == "Clarity" {
         format!("{:.2}%", value * 100.0)
     } else {
         format!("{value:.2}{}", param.unit())
@@ -52,11 +52,7 @@ pub(super) fn edit_value(
     let state_id = response.id.with("numeric-entry");
     let popup_id = egui::Popup::default_response_id(response);
     let binding = param as *const FloatParam as usize;
-    let factor = if param.name() == "Clarity" {
-        100.0
-    } else {
-        1.0
-    };
+    let factor = if label == "Clarity" { 100.0 } else { 1.0 };
     let mut entry = ui.data(|data| data.get_temp::<NumericEntry>(state_id));
 
     if response.secondary_clicked() {

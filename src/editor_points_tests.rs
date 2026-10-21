@@ -13,6 +13,9 @@ mod scale_tests;
 #[path = "editor_target_tests.rs"]
 mod target_tests;
 
+#[path = "editor_mode_tests.rs"]
+mod mode_tests;
+
 #[test]
 fn detection_menu_changes_global_algorithm_through_host_gestures() {
     use crate::pitch::DetectionMode;
@@ -30,7 +33,7 @@ fn detection_menu_changes_global_algorithm_through_host_gestures() {
         f.click_text(mode.label());
         f.frame(vec![]);
 
-        assert_eq!(f.editor.params.detection.value(), mode);
+        assert_eq!(f.editor.params.active().detection.value(), mode);
         assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
     }
 }
@@ -256,7 +259,7 @@ fn tab_switch_changes_knob_theme_and_keeps_independent_gain() {
     }]);
 
     assert!(f.editor.params.band(1).gain.value() > 0.0);
-    assert_eq!(f.editor.params.gain.value(), -6.0);
+    assert_eq!(f.editor.params.active().gain.value(), -6.0);
     f.click_text("Point 3");
 
     assert_eq!(f.editor.accent(), POINT_COLORS[2]);
@@ -268,7 +271,7 @@ fn global_controls_stay_neutral_and_ratio_edits_the_selected_point() {
     let mut f = Fixture::new();
     f.add();
     let setter = f.editor.gui.as_ref().unwrap().param_setter();
-    set_value(&setter, &f.editor.params.output, 3.0);
+    set_value(&setter, &f.editor.params.active().output, 3.0);
 
     for tab in ["Point 1", "Point 2"] {
         f.click_text(tab);
@@ -304,7 +307,7 @@ fn global_controls_stay_neutral_and_ratio_edits_the_selected_point() {
 
     assert!(f.editor.params.band(1).ratio.value() > 2.0);
     assert_eq!(f.editor.params.band(0).ratio.value(), 1.0);
-    assert_eq!(f.editor.params.tracking.value(), 35.0);
+    assert_eq!(f.editor.params.active().tracking.value(), 35.0);
 }
 
 #[test]
@@ -571,7 +574,7 @@ fn header_menu_changes_ui_scale_without_editing_audio_parameters() {
 
     assert_eq!(f.ctx.zoom_factor(), 1.25);
     assert!(f.host.events.lock().unwrap().is_empty());
-    assert_eq!(f.editor.params.gain.value(), -6.0);
+    assert_eq!(f.editor.params.active().gain.value(), -6.0);
 }
 
 #[test]

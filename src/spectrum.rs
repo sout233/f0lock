@@ -1,4 +1,5 @@
 use super::*;
+use crate::mode::OperatingMode;
 use crate::{
     analyzer::{BINS, bin_frequency, max_frequency},
     band::{BAND_COUNT, BAND_VALUES},
@@ -190,14 +191,20 @@ impl F0Editor {
 
         self.target_controls(ui, plot.rect, plot.max_hz);
 
-        let readout = if v[0] > 0.0 {
+        let mut readout = if v[0] > 0.0 {
             format!("{:.1} Hz   {:.0}%", v[0], v[1] * 100.0)
         } else {
             "— Hz   —%".into()
         };
 
+        let sidechain = self.params.mode.value() == OperatingMode::Sidechain;
+        if sidechain {
+            readout = format!("SC {readout}");
+        }
         let note = if v[0] > 0.0 {
             note_name(v[0])
+        } else if sidechain {
+            "Waiting for sidechain pitch".into()
         } else {
             "—".into()
         };

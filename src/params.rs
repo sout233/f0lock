@@ -1,6 +1,7 @@
 use crate::{
     band::{BAND_COUNT, BandControl},
     filter::FilterKind,
+    mode::OperatingMode,
     pitch::{DetectionMode, Target, TargetMode},
 };
 use nice_plug::prelude::*;
@@ -10,6 +11,57 @@ pub const UI_SCALES: [u32; 8] = [75, 90, 100, 110, 125, 150, 175, 200];
 
 #[derive(Params)]
 pub struct F0Params {
+    #[id = "operating_mode"]
+    pub mode: EnumParam<OperatingMode>,
+
+    #[id = "bypass"]
+    pub bypass: BoolParam,
+
+    #[persist = "ui_scale_percent"]
+    pub ui_scale_percent: AtomicU32,
+
+    #[nested(group = "Track EQ")]
+    pub track: ProcessingParams,
+
+    #[nested(id_prefix = "sc", group = "Sidechain EQ")]
+    pub sidechain: ProcessingParams,
+}
+
+impl Default for F0Params {
+    fn default() -> Self {
+        Self {
+            mode: EnumParam::new("Operating Mode", OperatingMode::Track),
+            bypass: BoolParam::new("Bypass", false).make_bypass(),
+            ui_scale_percent: AtomicU32::new(100),
+            track: ProcessingParams::new(""),
+            sidechain: ProcessingParams::new("Sidechain "),
+        }
+    }
+}
+
+impl F0Params {
+    pub fn active(&self) -> &ProcessingParams {
+        self.for_mode(self.mode.value())
+    }
+
+    pub fn for_mode(&self, mode: OperatingMode) -> &ProcessingParams {
+        match mode {
+            OperatingMode::Track => &self.track,
+            OperatingMode::Sidechain => &self.sidechain,
+        }
+    }
+
+    pub fn band(&self, index: usize) -> BandRef<'_> {
+        self.active().band(index)
+    }
+
+    pub fn target(&self) -> Target {
+        self.active().target()
+    }
+}
+
+#[derive(Params)]
+pub struct ProcessingParams {
     #[id = "pitch_detection"]
     pub detection: EnumParam<DetectionMode>,
 
@@ -27,9 +79,6 @@ pub struct F0Params {
 
     #[id = "target_tolerance"]
     pub target_tolerance: FloatParam,
-
-    #[persist = "ui_scale_percent"]
-    pub ui_scale_percent: AtomicU32,
 
     #[id = "gain"]
     pub gain: FloatParam,
@@ -58,9 +107,6 @@ pub struct F0Params {
     #[id = "output"]
     pub output: FloatParam,
 
-    #[id = "bypass"]
-    pub bypass: BoolParam,
-
     #[id = "f0_exists"]
     pub exists: BoolParam,
 
@@ -77,16 +123,17 @@ pub struct F0Params {
     pub additional: [BandParams; BAND_COUNT - 1],
 }
 
-impl Default for F0Params {
-    fn default() -> Self {
+impl ProcessingParams {
+    fn new(prefix: &str) -> Self {
+        let name = |label| format!("{prefix}{label}");
         Self {
-            detection: EnumParam::new("Pitch Detection", DetectionMode::Mpm),
-            target_mode: EnumParam::new("Target Mode", TargetMode::Auto),
-            target_min: target_frequency_param("Target Minimum", 100.0),
-            target_max: target_frequency_param("Target Maximum", 600.0),
-            target_reference: target_frequency_param("Target Reference", 300.0),
+            detection: EnumParam::new(name("Pitch Detection"), DetectionMode::Mpm),
+            target_mode: EnumParam::new(name("Target Mode"), TargetMode::Auto),
+            target_min: target_frequency_param(&name("Target Minimum"), 100.0),
+            target_max: target_frequency_param(&name("Target Maximum"), 600.0),
+            target_reference: target_frequency_param(&name("Target Reference"), 300.0),
             target_tolerance: FloatParam::new(
-                "Target Tolerance",
+                name("Target Tolerance"),
                 6.0,
                 FloatRange::Linear {
                     min: 1.0,
@@ -95,10 +142,8 @@ impl Default for F0Params {
             )
             .with_unit(" st")
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            ui_scale_percent: AtomicU32::new(100),
-
             gain: FloatParam::new(
-                "F0 gain",
+                name("F0 gain"),
                 -6.0,
                 FloatRange::Linear {
                     min: -24.0,
@@ -109,7 +154,7 @@ impl Default for F0Params {
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
 
             q: FloatParam::new(
-                "Q",
+                name("Q"),
                 3.0,
                 FloatRange::Skewed {
                     min: 0.3,
@@ -120,7 +165,7 @@ impl Default for F0Params {
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
             tracking: FloatParam::new(
-                "Tracking",
+                name("Tracking"),
                 35.0,
                 FloatRange::Skewed {
                     min: 5.0,
@@ -131,7 +176,7 @@ impl Default for F0Params {
             .with_unit(" ms"),
 
             attack: FloatParam::new(
-                "Attack",
+                name("Attack"),
                 10.0,
                 FloatRange::Skewed {
                     min: 0.1,
@@ -142,7 +187,7 @@ impl Default for F0Params {
             .with_unit(" ms"),
 
             release: FloatParam::new(
-                "Release",
+                name("Release"),
                 100.0,
                 FloatRange::Skewed {
                     min: 1.0,
@@ -153,7 +198,7 @@ impl Default for F0Params {
             .with_unit(" ms"),
 
             clarity: FloatParam::new(
-                "Clarity",
+                name("Clarity"),
                 0.85,
                 FloatRange::Linear {
                     min: 0.5,
@@ -162,7 +207,7 @@ impl Default for F0Params {
             ),
 
             gate: FloatParam::new(
-                "Detector gate",
+                name("Detector gate"),
                 -55.0,
                 FloatRange::Linear {
                     min: -80.0,
@@ -172,7 +217,7 @@ impl Default for F0Params {
             .with_unit(" dBFS"),
 
             mix: FloatParam::new(
-                "Mix",
+                name("Mix"),
                 100.0,
                 FloatRange::Linear {
                     min: 0.0,
@@ -182,7 +227,7 @@ impl Default for F0Params {
             .with_unit(" %"),
 
             output: FloatParam::new(
-                "Output",
+                name("Output"),
                 0.0,
                 FloatRange::Linear {
                     min: -24.0,
@@ -192,14 +237,12 @@ impl Default for F0Params {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
 
-            bypass: BoolParam::new("Bypass", false).make_bypass(),
+            exists: BoolParam::new(name("F0 exists"), true),
+            enabled: BoolParam::new(name("F0 enabled"), true),
+            ratio: ratio_param(name("F0 ratio")),
+            kind: EnumParam::new(name("F0 type"), FilterKind::Peak),
 
-            exists: BoolParam::new("F0 exists", true),
-            enabled: BoolParam::new("F0 enabled", true),
-            ratio: ratio_param("F0 ratio"),
-            kind: EnumParam::new("F0 type", FilterKind::Peak),
-
-            additional: std::array::from_fn(|i| BandParams::new(i + 2)),
+            additional: std::array::from_fn(|i| BandParams::new(i + 2, prefix)),
         }
     }
 }
@@ -253,10 +296,10 @@ fn target_frequency_param(name: &str, default: f32) -> FloatParam {
 }
 
 impl BandParams {
-    fn new(number: usize) -> Self {
+    fn new(number: usize, prefix: &str) -> Self {
         Self {
             gain: FloatParam::new(
-                format!("Band {number} gain"),
+                format!("{prefix}Band {number} gain"),
                 0.0,
                 FloatRange::Linear {
                     min: -24.0,
@@ -267,7 +310,7 @@ impl BandParams {
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
 
             q: FloatParam::new(
-                format!("Band {number} Q"),
+                format!("{prefix}Band {number} Q"),
                 3.0,
                 FloatRange::Skewed {
                     min: 0.3,
@@ -277,11 +320,11 @@ impl BandParams {
             )
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
-            ratio: ratio_param(format!("Band {number} ratio")),
-            kind: EnumParam::new(format!("Band {number} type"), FilterKind::Peak),
+            ratio: ratio_param(format!("{prefix}Band {number} ratio")),
+            kind: EnumParam::new(format!("{prefix}Band {number} type"), FilterKind::Peak),
 
-            exists: BoolParam::new(format!("Band {number} exists"), false),
-            enabled: BoolParam::new(format!("Band {number} enabled"), true),
+            exists: BoolParam::new(format!("{prefix}Band {number} exists"), false),
+            enabled: BoolParam::new(format!("{prefix}Band {number} enabled"), true),
         }
     }
 }
@@ -309,7 +352,7 @@ impl BandRef<'_> {
     }
 }
 
-impl F0Params {
+impl ProcessingParams {
     pub fn target(&self) -> Target {
         Target {
             mode: self.target_mode.value(),

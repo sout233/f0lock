@@ -2,7 +2,8 @@
 
 Select **Pitch Detection** in the header menu. The selection is a global,
 automatable enum parameter (`pitch_detection`), saved by the host with the
-project. Stable state IDs are `mpm`, `mpm_tracking`, and `pyin`. The default is
+project. Each operating mode has its own selection; Sidechain EQ applies
+detection to the external bus. Stable state IDs are `mpm`, `mpm_tracking`, and `pyin`. The default is
 MPM, retaining the behavior of projects saved before this parameter existed.
 
 ## Modes

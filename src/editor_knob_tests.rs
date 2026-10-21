@@ -16,8 +16,8 @@ fn envelope_knobs_accept_precise_times_through_host_gestures() {
         f.frame(vec![]);
     }
 
-    assert!((f.editor.params.attack.value() - 25.125).abs() < 0.0001);
-    assert!((f.editor.params.release.value() - 456.789).abs() < 0.0001);
+    assert!((f.editor.params.active().attack.value() - 25.125).abs() < 0.0001);
+    assert!((f.editor.params.active().release.value() - 456.789).abs() < 0.0001);
     assert_eq!(
         *f.host.events.lock().unwrap(),
         vec!["begin", "set", "end", "begin", "set", "end"]
@@ -31,7 +31,7 @@ fn right_click_input_preserves_precision_and_displays_two_decimals() {
     f.click_text("Apply");
     f.frame(vec![]);
 
-    assert!((f.editor.params.tracking.value() - 47.529938).abs() < 0.00002);
+    assert!((f.editor.params.active().tracking.value() - 47.529938).abs() < 0.00002);
     assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
     assert!(f.shapes.iter().any(|shape| matches!(&shape.shape,
         egui::Shape::Text(text) if text.galley.job.text == "47.53 ms")));
@@ -50,7 +50,7 @@ fn clarity_accepts_percentages_and_enter_confirms_input() {
     }]);
     f.frame(vec![]);
 
-    assert!((f.editor.params.clarity.value() - 0.82345).abs() < 0.000001);
+    assert!((f.editor.params.active().clarity.value() - 0.82345).abs() < 0.000001);
     assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
     assert!(f.shapes.iter().any(|shape| matches!(&shape.shape,
         egui::Shape::Text(text) if text.galley.job.text == "82.35%")));
@@ -69,7 +69,7 @@ fn invalid_input_and_cancel_never_write_parameters() {
         f.click_text("Apply");
         f.frame(vec![]);
 
-        assert_eq!(f.editor.params.tracking.value(), 35.0);
+        assert_eq!(f.editor.params.active().tracking.value(), 35.0);
         assert!(f.host.events.lock().unwrap().is_empty());
         assert!(f.shapes.iter().any(|shape| matches!(&shape.shape,
             egui::Shape::Text(text) if text.galley.job.text == error)));
@@ -128,7 +128,7 @@ fn escape_and_tab_switch_discard_unconfirmed_input() {
     }]);
     f.frame(vec![]);
 
-    assert_eq!(f.editor.params.tracking.value(), 35.0);
+    assert_eq!(f.editor.params.active().tracking.value(), 35.0);
     assert!(f.host.events.lock().unwrap().is_empty());
     assert!(!f.shapes.iter().any(|shape| matches!(&shape.shape,
         egui::Shape::Text(text) if text.galley.job.text == "Apply")));
@@ -139,8 +139,8 @@ fn all_knob_readouts_use_two_decimal_places() {
     let mut f = Fixture::new();
     let gui = f.editor.gui.as_ref().unwrap();
     let setter = gui.param_setter();
-    set_value(&setter, &f.editor.params.gate, -57.68801);
-    set_value(&setter, &f.editor.params.mix, 94.55998);
+    set_value(&setter, &f.editor.params.active().gate, -57.68801);
+    set_value(&setter, &f.editor.params.active().mix, 94.55998);
     f.frame(vec![]);
 
     for value in [

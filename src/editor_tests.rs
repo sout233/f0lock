@@ -156,7 +156,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
             let setter = editor.gui.as_ref().unwrap().param_setter();
             set_value(
                 &setter,
-                &params.target_mode,
+                &params.active().target_mode,
                 if time == 10.0 {
                     crate::pitch::TargetMode::Range
                 } else {
@@ -328,7 +328,7 @@ fn drag_gain(fine: bool) -> f32 {
     assert_eq!(recorded.iter().filter(|&&e| e == "begin").count(), 1);
     assert_eq!(recorded.iter().filter(|&&e| e == "end").count(), 1);
     assert!(recorded.contains(&"set"));
-    params.gain.value() + 6.0
+    params.active().gain.value() + 6.0
 }
 
 #[test]
@@ -351,9 +351,9 @@ fn control_click_resets_knob_through_host_gesture() {
     let gui = GuiContext::new(host.clone());
     let setter = gui.param_setter();
 
-    setter.begin_set_parameter(&params.gain);
-    setter.set_parameter(&params.gain, 12.0);
-    setter.end_set_parameter(&params.gain);
+    setter.begin_set_parameter(&params.active().gain);
+    setter.set_parameter(&params.active().gain, 12.0);
+    setter.end_set_parameter(&params.active().gain);
 
     host.events.lock().unwrap().clear();
 
@@ -397,6 +397,6 @@ fn control_click_resets_knob_through_host_gesture() {
         modifiers,
     );
 
-    assert_eq!(params.gain.value(), -6.0);
+    assert_eq!(params.active().gain.value(), -6.0);
     assert_eq!(*host.events.lock().unwrap(), vec!["begin", "set", "end"]);
 }
