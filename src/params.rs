@@ -1,6 +1,7 @@
 use crate::{
     band::{BAND_COUNT, BandControl},
     filter::FilterKind,
+    pitch::DetectionMode,
 };
 use nice_plug::prelude::*;
 use std::sync::atomic::AtomicU32;
@@ -9,6 +10,9 @@ pub const UI_SCALES: [u32; 8] = [75, 90, 100, 110, 125, 150, 175, 200];
 
 #[derive(Params)]
 pub struct F0Params {
+    #[id = "pitch_detection"]
+    pub detection: EnumParam<DetectionMode>,
+
     #[persist = "ui_scale_percent"]
     pub ui_scale_percent: AtomicU32,
 
@@ -55,6 +59,7 @@ pub struct F0Params {
 impl Default for F0Params {
     fn default() -> Self {
         Self {
+            detection: EnumParam::new("Pitch Detection", DetectionMode::Mpm),
             ui_scale_percent: AtomicU32::new(100),
 
             gain: FloatParam::new(

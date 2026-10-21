@@ -15,3 +15,7 @@ patch again. Keep these fixes when updating upstream sources.
 
 `baseview` and `egui-baseview` are also patched local sources. Their individual
 license files and upstream metadata are retained in their directories.
+
+`pitch-estimate` additionally exposes allocation-free MPM candidate enumeration
+and YIN difference/CMNDF curves. Its original `detect()` paths are unchanged.
+These APIs support f0lock's [streaming pitch detection](../docs/pitch-detection.md).

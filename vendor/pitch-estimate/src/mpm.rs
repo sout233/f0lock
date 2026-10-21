@@ -32,6 +32,32 @@ pub struct McLeodDetector<T> {
 }
 
 impl<T: Float> McLeodDetector<T> {
+    /// Visit all refined positive NSDF maxima, without the relative-peak cutoff.
+    /// This allows a caller to track competing periods across audio frames.
+    /// Uses the detector's preallocated transform buffers.
+    pub fn candidates(&mut self, frame: &[T], sample_rate: u32, mut visit: impl FnMut(Pitch<T>)) {
+        if frame.len() < self.frame_len {
+            return;
+        }
+
+        let x = &frame[..self.frame_len];
+        let Some(stats) = screen(x, self.power_threshold) else {
+            return;
+        };
+        let len = self.compute_nsdf(x, stats.sum_sq);
+
+        Self::for_each_key_maximum(&self.nsdf, len, |lag, value| {
+            let frequency = T::from_u32_lossy(sample_rate) / lag;
+            let clarity = value.clamp_to(T::ZERO, T::ONE);
+
+            if frequency.is_finite() && clarity.is_finite() {
+                visit(Pitch { frequency, clarity });
+            }
+
+            false
+        });
+    }
+
     /// Create a detector for frames of `frame_len` samples that examines
     /// lags `1..=tau_max`.
     ///

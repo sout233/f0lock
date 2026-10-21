@@ -33,6 +33,19 @@ pub struct YinDetector<T> {
 }
 
 impl<T: Float> YinDetector<T> {
+    /// Calculate difference and CMNDF curves for probabilistic thresholding.
+    /// Both finite prefixes borrow the detector's preallocated working buffers.
+    pub fn analyze_curves(&mut self, frame: &[T]) -> Option<(&[T], &[T])> {
+        if frame.len() < self.frame_len {
+            return None;
+        }
+
+        let x = &frame[..self.frame_len];
+        screen(x, self.power_threshold)?;
+        let len = self.compute_curves(x);
+        Some((&self.diff[..len], &self.cmndf[..len]))
+    }
+
     /// Create a detector for frames of `frame_len` samples with integration
     /// window `window`. Lags `1..=frame_len - window` are examined.
     ///

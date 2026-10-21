@@ -7,6 +7,7 @@ mod filter;
 #[cfg(test)]
 mod multiband_tests;
 mod params;
+mod pitch;
 mod realtime;
 #[cfg(test)]
 mod spectrum_tests;
@@ -196,6 +197,7 @@ impl Plugin for F0Lock {
         for mut frame in buffer.iter_samples() {
             let controls = Controls {
                 bands: std::array::from_fn(|i| self.params.band(i).control()),
+                detection: self.params.detection.value(),
                 tracking_ms: self.params.tracking.value(),
                 clarity: self.params.clarity.value(),
                 gate_db: self.params.gate.value(),

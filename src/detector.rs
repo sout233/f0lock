@@ -1,4 +1,5 @@
 use crate::filter::{Coefficients, Svf};
+use crate::pitch::{DetectionMode, PitchTracking};
 use pitch_estimate::{McLeodDetector, PitchDetector};
 
 pub const WINDOW: usize = 1024;
@@ -12,6 +13,8 @@ pub struct Estimate {
 }
 
 pub struct Detector {
+    pub mode: DetectionMode,
+    tracking: PitchTracking,
     pub rate: f32,
     decimation: usize,
     phase: usize,
@@ -36,6 +39,8 @@ impl Detector {
             .with_clarity_threshold(0.0);
 
         Self {
+            mode: DetectionMode::Mpm,
+            tracking: PitchTracking::new(rate, WINDOW, HOP),
             rate,
             decimation,
             phase: 0,
@@ -54,6 +59,7 @@ impl Detector {
     }
 
     pub fn reset(&mut self) {
+        self.tracking.reset();
         self.filters = [[Svf::default(); 2]; 2];
         self.rings = [[0.0; WINDOW]; 2];
         self.position = 0;
@@ -99,6 +105,7 @@ impl Detector {
     }
 
     pub fn analyze(&mut self, gate_db: f32, threshold: f32) -> Estimate {
+        self.tracking.set_mode(self.mode);
         let means: [f32; 2] =
             std::array::from_fn(|ch| self.rings[ch].iter().sum::<f32>() / WINDOW as f32);
         let powers: [f32; 2] =
@@ -113,9 +120,22 @@ impl Detector {
         let rms = (self.frame.iter().map(|v| v * v).sum::<f32>() / WINDOW as f32).sqrt();
 
         if rms < 10.0_f32.powf(gate_db / 20.0) {
+            self.tracking.reset();
             return Estimate {
                 rms,
                 ..Estimate::default()
+            };
+        }
+
+        if self.mode != DetectionMode::Mpm {
+            let (frequency, clarity) =
+                self.tracking
+                    .analyze(&self.frame, self.rate, &mut self.mpm, threshold);
+
+            return Estimate {
+                frequency,
+                clarity,
+                rms,
             };
         }
 

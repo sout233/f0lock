@@ -2,10 +2,12 @@ use crate::{
     analyzer::Analyzer,
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
+    pitch::DetectionMode,
 };
 
 #[derive(Clone, Copy)]
 pub struct Controls {
+    pub detection: DetectionMode,
     pub bands: [BandControl; BAND_COUNT],
     pub tracking_ms: f32,
     pub clarity: f32,
@@ -22,6 +24,7 @@ impl Default for Controls {
         bands[0].gain = -6.0;
 
         Self {
+            detection: DetectionMode::Mpm,
             bands,
             tracking_ms: 35.0,
             clarity: 0.85,
@@ -104,6 +107,7 @@ impl Engine {
         self.analyzer.push(input, self.visualize);
 
         if self.detector.push(input) {
+            self.detector.mode = controls.detection;
             self.estimate = self.detector.analyze(controls.gate_db, controls.clarity);
 
             if self.estimate.frequency > 0.0 {

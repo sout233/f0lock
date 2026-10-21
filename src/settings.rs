@@ -1,4 +1,5 @@
 use super::*;
+use crate::pitch::DetectionMode;
 use std::sync::atomic::Ordering;
 
 const UI_SCALES: [u32; 8] = [75, 90, 100, 110, 125, 150, 175, 200];
@@ -52,6 +53,21 @@ impl F0Editor {
                     self.audio_open = true;
                     egui::Popup::close_all(ui.ctx());
                 }
+
+                ui.menu_button("Pitch Detection", |ui| {
+                    let Some(gui) = &self.gui else { return };
+                    let setter = gui.param_setter();
+
+                    for mode in DetectionMode::ALL {
+                        if ui
+                            .selectable_label(self.params.detection.value() == mode, mode.label())
+                            .clicked()
+                        {
+                            set_value(&setter, &self.params.detection, mode);
+                            egui::Popup::close_all(ui.ctx());
+                        }
+                    }
+                });
 
                 ui.menu_button("UI Scale", |ui| {
                     for percent in UI_SCALES {

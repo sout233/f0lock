@@ -65,6 +65,7 @@ unsafe fn saved_band_state_round_trip(
         };
 
         for (name, text) in [
+            ("Pitch Detection", "pYIN"),
             ("Band 2 exists", "On"),
             ("Band 2 ratio", "2.5"),
             ("Band 2 type", "High Shelf"),
@@ -164,7 +165,7 @@ unsafe fn saved_band_state_round_trip(
             );
         }
 
-        println!("Additional band state: existence, ratio, filter type, and gain restored");
+        println!("Pitch detection and additional band parameters restored from CLAP state");
     }
 }
 
@@ -335,11 +336,12 @@ fn packaged_clap_processes_and_accepts_host_automation() {
             .cast::<clap_plugin_params>();
 
         assert!(!params.is_null());
-        assert_eq!((*params).count.unwrap()(plugin), 54);
+        let count = (*params).count.unwrap()(plugin);
+        assert_eq!(count, 55);
         let mut gain_id = None;
         let mut bypass_id = None;
 
-        for i in 0..54 {
+        for i in 0..count {
             let mut info = std::mem::zeroed::<clap_param_info>();
 
             assert!((*params).get_info.unwrap()(plugin, i, &mut info));

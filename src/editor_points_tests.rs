@@ -10,6 +10,28 @@ mod spectrum_tests;
 #[path = "editor_scale_tests.rs"]
 mod scale_tests;
 
+#[test]
+fn detection_menu_changes_global_algorithm_through_host_gestures() {
+    use crate::pitch::DetectionMode;
+
+    let mut f = Fixture::new();
+
+    for mode in [
+        DetectionMode::MpmTracking,
+        DetectionMode::Pyin,
+        DetectionMode::Mpm,
+    ] {
+        f.host.events.lock().unwrap().clear();
+        f.click(Pos2::new(860.0, 32.0), egui::PointerButton::Primary);
+        f.click_text("Pitch Detection");
+        f.click_text(mode.label());
+        f.frame(vec![]);
+
+        assert_eq!(f.editor.params.detection.value(), mode);
+        assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+    }
+}
+
 struct Fixture {
     ctx: egui::Context,
     editor: F0Editor,
