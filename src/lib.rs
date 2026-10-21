@@ -202,7 +202,10 @@ impl Plugin for F0Lock {
         }
 
         self.engine = Engine::new(config.sample_rate);
-        self.engine.set_lookahead(self.params.lookahead.value());
+        self.engine.configure_lookahead(
+            self.params.lookahead.value(),
+            self.params.lookahead_time.value(),
+        );
         self.telemetry.publish(&self.engine);
         context.set_latency_samples(self.engine.latency_samples() as u32);
         true
@@ -221,7 +224,10 @@ impl Plugin for F0Lock {
     ) -> ProcessStatus {
         let _denormal_guard = realtime::DenormalGuard::new();
         let old_latency = self.engine.latency_samples();
-        self.engine.set_lookahead(self.params.lookahead.value());
+        self.engine.configure_lookahead(
+            self.params.lookahead.value(),
+            self.params.lookahead_time.value(),
+        );
 
         if old_latency != self.engine.latency_samples() {
             context.set_latency_samples(self.engine.latency_samples() as u32);

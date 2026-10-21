@@ -92,20 +92,28 @@ pub(super) unsafe fn verify(plugin: *const clap_plugin, params: *const clap_plug
             .cast::<clap_plugin_tail>();
         assert!(!latency.is_null() && !tail.is_null());
         assert!((*plugin).activate.unwrap()(plugin, 48000.0, 1, 512));
-        assert_eq!((*latency).get.unwrap()(plugin), 7200);
+        assert_eq!((*latency).get.unwrap()(plugin), 9600);
         (*plugin).on_main_thread.unwrap()(plugin);
         assert!((*plugin).start_processing.unwrap()(plugin));
         (*plugin).reset.unwrap()(plugin);
 
-        for i in 0..7232 {
+        for i in 0..9632 {
             let input = if i == 7 { [0.25, -0.25] } else { [0.0; 2] };
             let event = (i == 0).then(|| text_event(plugin, params, "Bypass", "On"));
             let output = process_sample(plugin, input, event);
-            let expected = if i == 7207 { [0.25, -0.25] } else { [0.0; 2] };
+            let expected = if i == 9607 { [0.25, -0.25] } else { [0.0; 2] };
             assert_eq!(output, expected, "Lookahead impulse at sample {i}");
         }
 
-        assert_eq!((*tail).get.unwrap()(plugin), 7200);
+        assert_eq!((*tail).get.unwrap()(plugin), 9600);
+        let minimum = text_event(plugin, params, "Lookahead Time", "Minimum");
+        assert_eq!(process_sample(plugin, [0.0; 2], Some(minimum)), [0.0; 2]);
+        assert_eq!((*latency).get.unwrap()(plugin), 5631);
+        for i in 1..5663 {
+            let input = if i == 7 { [0.25, -0.25] } else { [0.0; 2] };
+            let expected = if i == 5638 { [0.25, -0.25] } else { [0.0; 2] };
+            assert_eq!(process_sample(plugin, input, None), expected);
+        }
         let off = text_event(plugin, params, "Lookahead", "Off");
         assert_eq!(
             process_sample(plugin, [0.25, -0.25], Some(off)),

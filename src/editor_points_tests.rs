@@ -162,7 +162,7 @@ impl Fixture {
         };
         Pos2::new(
             57.0 + (hz / 20.0).ln() / 1000.0_f32.ln() * 786.0,
-            181.5 - gain / 48.0 * 173.0,
+            172.5 - gain / 48.0 * 155.0,
         )
     }
 
@@ -558,6 +558,7 @@ fn lookahead_setting_uses_host_gestures_and_displays_the_reported_latency() {
             .contains(ParamFlags::NON_AUTOMATABLE)
     );
     f.click_text("Lookahead · Off");
+    f.click_text("150 ms");
     assert!(f.editor.params.lookahead.value());
     assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
 
@@ -573,6 +574,58 @@ fn lookahead_setting_uses_host_gestures_and_displays_the_reported_latency() {
     f.frame(vec![]);
     assert!(f.shapes.iter().any(|s| matches!(&s.shape,
         egui::Shape::Text(t) if t.galley.job.text == "7200 samples (150.0 ms)")));
+}
+
+#[test]
+fn processing_bar_aligns_controls_and_selects_lookahead_duration() {
+    use crate::lookahead::LookaheadTime;
+    let mut f = Fixture::new();
+    let strip = Rect::from_min_max(Pos2::new(0.0, 282.0), Pos2::new(900.0, 314.0));
+
+    for (label, left, right) in [
+        ("Track EQ", 20.0, 180.0),
+        ("Lookahead · Off", 190.0, 350.0),
+        ("Active", 760.0, 880.0),
+    ] {
+        let bounds = f
+            .shapes
+            .iter()
+            .find_map(|s| match &s.shape {
+                egui::Shape::Text(t) if t.galley.job.text == label => {
+                    Some(s.shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            strip.contains_rect(bounds) && bounds.left() >= left && bounds.right() <= right,
+            "{label}: {bounds:?}"
+        );
+    }
+
+    f.click_text("Lookahead · Off");
+    f.click_text("200 ms");
+    assert!(f.editor.params.lookahead.value());
+    assert_eq!(f.editor.params.lookahead_time.value(), LookaheadTime::Ms200);
+    assert_eq!(
+        *f.host.events.lock().unwrap(),
+        vec!["begin", "set", "end", "begin", "set", "end"]
+    );
+    f.host.events.lock().unwrap().clear();
+    f.click_text("Lookahead · 200 ms");
+    f.click_text("Minimum");
+    assert_eq!(
+        f.editor.params.lookahead_time.value(),
+        LookaheadTime::Minimum
+    );
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+    f.click_text("Lookahead · Minimum");
+    f.click_text("Off");
+    assert!(!f.editor.params.lookahead.value());
+    f.click_text("Active");
+    assert!(f.editor.params.bypass.value());
+    f.click_text("Bypass");
+    assert!(!f.editor.params.bypass.value());
 }
 
 #[test]

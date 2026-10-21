@@ -1,10 +1,45 @@
 use super::*;
-use crate::mode::OperatingMode;
+use crate::{lookahead::LookaheadTime, mode::OperatingMode};
 
 impl F0Editor {
-    pub(super) fn lookahead_button(&self, ui: &mut egui::Ui, canvas: Rect, values: &[f32; 10]) {
+    pub(super) fn processing_bar(&self, ui: &mut egui::Ui, rect: Rect, values: &[f32; 10]) {
         let Some(gui) = &self.gui else { return };
+        let setter = gui.param_setter();
+        let painter = ui.painter_at(rect);
+        gradient_rect(
+            &painter,
+            rect,
+            Color32::from_gray(39),
+            Color32::from_gray(30),
+        );
+        painter.line_segment(
+            [rect.left_top(), rect.right_top()],
+            Stroke::new(1.0, Color32::from_gray(58)),
+        );
+        painter.line_segment(
+            [rect.left_bottom(), rect.right_bottom()],
+            Stroke::new(1.0, Color32::from_gray(19)),
+        );
+        let button_rect =
+            |x| Rect::from_min_size(rect.min + Vec2::new(x, 4.0), Vec2::new(160.0, 24.0));
+        let accent = self.accent();
+        let mode = self.params.mode.value();
+        let button = strip_button(ui, button_rect(20.0), mode.label(), accent, false, true);
+
+        egui::Popup::menu(&button).width(160.0).show(|ui| {
+            for choice in OperatingMode::ALL {
+                if ui
+                    .selectable_label(mode == choice, choice.label())
+                    .clicked()
+                {
+                    set_value(&setter, &self.params.mode, choice);
+                    egui::Popup::close_all(ui.ctx());
+                }
+            }
+        });
+
         let enabled = self.params.lookahead.value();
+        let duration = self.params.lookahead_time.value();
         let latency = self
             .telemetry
             .latency_samples
@@ -14,61 +49,103 @@ impl F0Editor {
         } else if latency > 0 && values[7] > 0.0 {
             format!("{:.0} ms", latency as f32 * 1000.0 / values[7])
         } else {
-            "On".to_owned()
+            duration.label().to_owned()
         };
+        let button = strip_button(
+            ui,
+            button_rect(190.0),
+            &format!("Lookahead · {state}"),
+            accent,
+            enabled,
+            true,
+        );
 
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_size(
-                canvas.min + Vec2::new(326.0, 20.0),
-                Vec2::new(184.0, 25.0),
-            )),
-            |ui| {
-                let button = egui::Button::new(
-                    egui::RichText::new(format!("Lookahead · {state}")).size(12.0),
-                )
-                .fill(if enabled {
-                    self.accent().gamma_multiply(0.18)
-                } else {
-                    Color32::from_gray(43)
-                })
-                .stroke(Stroke::new(
-                    1.0,
-                    if enabled {
-                        self.accent()
-                    } else {
-                        Color32::from_gray(78)
-                    },
-                ));
-
-                if ui.add_sized(Vec2::new(184.0, 24.0), button).clicked() {
-                    set_value(&gui.param_setter(), &self.params.lookahead, !enabled);
+        egui::Popup::menu(&button).width(160.0).show(|ui| {
+            if ui.selectable_label(!enabled, "Off").clicked() {
+                if enabled {
+                    set_value(&setter, &self.params.lookahead, false);
                 }
+                egui::Popup::close_all(ui.ctx());
+            }
+
+            for choice in LookaheadTime::ALL {
+                if ui
+                    .selectable_label(enabled && duration == choice, choice.label())
+                    .clicked()
+                {
+                    if duration != choice {
+                        set_value(&setter, &self.params.lookahead_time, choice);
+                    }
+                    if !enabled {
+                        set_value(&setter, &self.params.lookahead, true);
+                    }
+                    egui::Popup::close_all(ui.ctx());
+                }
+            }
+        });
+
+        let bypass = self.params.bypass.value();
+        let button = strip_button(
+            ui,
+            Rect::from_min_size(
+                rect.right_top() + Vec2::new(-140.0, 4.0),
+                Vec2::new(120.0, 24.0),
+            ),
+            if bypass { "Bypass" } else { "Active" },
+            accent,
+            !bypass,
+            false,
+        );
+
+        if button.clicked() {
+            set_value(&setter, &self.params.bypass, !bypass);
+        }
+    }
+}
+
+fn strip_button(
+    ui: &mut egui::Ui,
+    rect: Rect,
+    label: &str,
+    accent: Color32,
+    active: bool,
+    dropdown: bool,
+) -> egui::Response {
+    let button = egui::Button::new(egui::RichText::new(label).size(12.0))
+        .corner_radius(4.0)
+        .fill(if active {
+            accent.gamma_multiply(0.16)
+        } else {
+            Color32::from_gray(40)
+        })
+        .stroke(Stroke::new(
+            1.0,
+            if active {
+                accent.gamma_multiply(0.7)
+            } else {
+                Color32::from_gray(73)
             },
+        ));
+    let response = ui
+        .put(rect, button)
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+    if dropdown {
+        let center = rect.right_center() - Vec2::new(11.0, 0.0);
+        let color = if response.hovered() {
+            Color32::WHITE
+        } else {
+            MUTED
+        };
+        ui.painter().line_segment(
+            [center + Vec2::new(-2.5, -1.0), center + Vec2::new(0.0, 1.5)],
+            Stroke::new(1.0, color),
+        );
+        ui.painter().line_segment(
+            [center + Vec2::new(0.0, 1.5), center + Vec2::new(2.5, -1.0)],
+            Stroke::new(1.0, color),
         );
     }
 
-    pub(super) fn mode_button(&self, ui: &mut egui::Ui, canvas: Rect) {
-        let Some(gui) = &self.gui else { return };
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_size(
-                canvas.min + Vec2::new(162.0, 20.0),
-                Vec2::new(144.0, 25.0),
-            )),
-            |ui| {
-                let mode = self.params.mode.value();
-                let button = ui.add_sized(Vec2::new(144.0, 24.0), egui::Button::new(mode.label()));
-                egui::Popup::menu(&button).width(144.0).show(|ui| {
-                    for choice in OperatingMode::ALL {
-                        if ui
-                            .selectable_label(mode == choice, choice.label())
-                            .clicked()
-                        {
-                            set_value(&gui.param_setter(), &self.params.mode, choice);
-                            egui::Popup::close_all(ui.ctx());
-                        }
-                    }
-                });
-            },
-        );
-    }
+    response
 }

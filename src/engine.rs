@@ -2,7 +2,7 @@ use crate::{
     analyzer::Analyzer,
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
-    lookahead::{Decision, Lookahead},
+    lookahead::{Decision, Lookahead, LookaheadTime},
     mode::OperatingMode,
     pitch::{DetectionMode, Target},
 };
@@ -134,8 +134,8 @@ impl Engine {
         self.prelocking = false;
     }
 
-    pub fn set_lookahead(&mut self, enabled: bool) {
-        if self.lookahead.set_enabled(enabled) {
+    pub fn configure_lookahead(&mut self, enabled: bool, duration: LookaheadTime) {
+        if self.lookahead.configure(enabled, duration) {
             self.reset();
         }
     }

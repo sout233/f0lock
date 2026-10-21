@@ -169,38 +169,11 @@ impl F0Editor {
             self.about_open = true;
         }
 
-        self.mode_button(ui, canvas);
-        self.lookahead_button(ui, canvas, &v);
         level_bar(&p, at(609.0, 25.0), v[5]);
         level_bar(&p, at(609.0, 36.0), v[6]);
 
-        let bypass = self.params.bypass.value();
-        let button = Rect::from_min_max(at(745.0, 18.0), at(830.0, 46.0));
-        let response = ui.interact(button, ui.make_persistent_id("bypass"), Sense::click());
-        p.circle_filled(
-            at(758.0, 32.0),
-            2.5,
-            if bypass { MUTED } else { self.accent() },
-        );
-        p.text(
-            at(790.0, 32.0),
-            egui::Align2::CENTER_CENTER,
-            if bypass { "Bypass" } else { "Active" },
-            FontId::proportional(12.0),
-            if response.hovered() {
-                Color32::WHITE
-            } else {
-                TEXT
-            },
-        );
-
-        if response.clicked()
-            && let Some(gui) = &self.gui
-        {
-            set_value(&gui.param_setter(), &self.params.bypass, !bypass);
-        }
-
-        self.spectrum(ui, Rect::from_min_max(at(20.0, 78.0), at(880.0, 296.0)), &v);
+        self.spectrum(ui, Rect::from_min_max(at(20.0, 78.0), at(880.0, 278.0)), &v);
+        self.processing_bar(ui, Rect::from_min_max(at(0.0, 282.0), at(900.0, 314.0)), &v);
         self.point_tabs(ui, Rect::from_min_max(at(0.0, 314.0), at(900.0, 346.0)));
         self.controls(ui, canvas, &v);
         self.settings_menu(ui, canvas, &v);

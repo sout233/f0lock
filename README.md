@@ -31,8 +31,8 @@ be ambiguous in Auto. Clarity in this mode measures spectral evidence, so its
 values are not directly comparable with MPM / pYIN. See
 [the algorithm notes](docs/spectral-melody.md) for implementation and validation.
 
-The header's **Lookahead** button buffers audio by at least 150 ms so pitch
-decisions can process note onsets. It is off by default and reports its latency
+The spectrum toolbar's **Lookahead** menu offers Minimum, 150, 200 and 300 ms
+to process note onsets. It is off by default and reports its latency
 to the host. First pitch acquisition now initializes a fully dry EQ directly;
 later note changes still use Tracking. See [timing details](docs/lookahead.md).
 

@@ -1,4 +1,5 @@
 use crate::engine::{Controls, Engine};
+use crate::lookahead::LookaheadTime;
 use std::f32::consts::TAU;
 
 #[test]
@@ -32,42 +33,72 @@ fn first_pitch_initializes_frequency_before_attack_instead_of_sweeping_from_150h
 #[test]
 fn lookahead_applies_eq_to_the_start_of_the_delayed_note() {
     for detection in crate::pitch::DetectionMode::ALL {
-        for enabled in [false, true] {
-            let mut engine = Engine::new(48000.0);
-            engine.set_lookahead(enabled);
-            let delay = engine.latency_samples();
-            let mut controls = Controls {
-                detection,
-                tracking_ms: 300.0,
-                ..Controls::default()
-            };
-            controls.bands[0].gain = -12.0;
-            let mut power = [0.0_f64; 2];
+        for duration in [LookaheadTime::Minimum, LookaheadTime::Ms150] {
+            for enabled in [false, true] {
+                let mut engine = Engine::new(48000.0);
+                engine.configure_lookahead(enabled, duration);
+                let delay = engine.latency_samples();
+                let mut controls = Controls {
+                    detection,
+                    tracking_ms: 300.0,
+                    ..Controls::default()
+                };
+                controls.bands[0].gain = -12.0;
+                let mut power = [0.0_f64; 2];
 
-            nice_assert_no_alloc::assert_no_alloc(|| {
-                for i in 0..24000 {
-                    let sample = 0.1 * (TAU * 880.0 * i as f32 / 48000.0).sin();
-                    let output = engine.process([sample; 2], controls);
+                nice_assert_no_alloc::assert_no_alloc(|| {
+                    for i in 0..24000 {
+                        let sample = 0.1 * (TAU * 880.0 * i as f32 / 48000.0).sin();
+                        let output = engine.process([sample; 2], controls);
 
-                    if i < delay {
-                        assert_eq!(output, [0.0; 2]);
+                        if i < delay {
+                            assert_eq!(output, [0.0; 2]);
+                        }
+
+                        if (delay + 1056..delay + 2016).contains(&i) {
+                            let reference =
+                                0.1 * (TAU * 880.0 * (i - delay) as f32 / 48000.0).sin();
+                            power[0] += f64::from(reference).powi(2);
+                            power[1] += f64::from(output[0]).powi(2);
+                        }
                     }
+                });
 
-                    if (delay + 1056..delay + 2016).contains(&i) {
-                        let reference = 0.1 * (TAU * 880.0 * (i - delay) as f32 / 48000.0).sin();
-                        power[0] += f64::from(reference).powi(2);
-                        power[1] += f64::from(output[0]).powi(2);
-                    }
-                }
-            });
-
-            let gain = 10.0 * (power[1] / power[0]).log10();
-            let expected = if enabled { -12.0 } else { 0.0 };
-            assert!(
-                (gain - expected).abs() < 0.2,
-                "{detection:?}, lookahead={enabled}, onset gain={gain}"
-            );
+                let gain = 10.0 * (power[1] / power[0]).log10();
+                let expected = if enabled { -12.0 } else { 0.0 };
+                assert!(
+                    (gain - expected).abs() < 0.2,
+                    "{detection:?}, lookahead={enabled}, onset gain={gain}"
+                );
+            }
         }
+    }
+}
+
+#[test]
+fn lookahead_presets_produce_the_selected_delay_without_realtime_allocations() {
+    for (rate, expected) in [
+        (8000.0, [1407, 1407, 1600, 2400]),
+        (48000.0, [5631, 7200, 9600, 14400]),
+    ] {
+        let mut engine = Engine::new(rate);
+        let controls = Controls {
+            mix: 0.0,
+            ..Controls::default()
+        };
+
+        nice_assert_no_alloc::assert_no_alloc(|| {
+            for (duration, delay) in LookaheadTime::ALL.into_iter().zip(expected) {
+                engine.configure_lookahead(true, duration);
+                assert_eq!(engine.latency_samples(), delay);
+
+                for i in 0..delay + 16 {
+                    let value = if i == 3 { 0.25 } else { 0.0 };
+                    let output = engine.process([value; 2], controls);
+                    assert_eq!(output, if i == delay + 3 { [0.25; 2] } else { [0.0; 2] });
+                }
+            }
+        });
     }
 }
 
@@ -76,7 +107,7 @@ fn delay_keeps_dry_bypass_and_stereo_automation_aligned_and_reset_discards_histo
     for rate in [8000.0, 44100.0, 48000.0, 192000.0] {
         for bypass in [false, true] {
             let mut engine = Engine::new(rate);
-            engine.set_lookahead(true);
+            engine.configure_lookahead(true, LookaheadTime::default());
             let delay = engine.latency_samples();
             assert!(delay >= (rate * 0.15).round() as usize);
             assert!(delay >= engine.detector.maximum_decision_age_samples());
@@ -105,7 +136,7 @@ fn delay_keeps_dry_bypass_and_stereo_automation_aligned_and_reset_discards_histo
                     assert_eq!(engine.process([0.0; 2], controls), [0.0; 2]);
                 }
 
-                engine.set_lookahead(false);
+                engine.configure_lookahead(false, LookaheadTime::default());
                 assert_eq!(engine.latency_samples(), 0);
                 assert_eq!(engine.process([0.25, -0.25], controls), [0.25, -0.25]);
             });
@@ -121,7 +152,7 @@ fn buffered_pitch_and_parameters_share_the_source_timestamp() {
     };
 
     let mut queue = Lookahead::new(48000.0, 5631);
-    queue.set_enabled(true);
+    queue.configure(true, LookaheadTime::default());
     let delay = queue.latency_samples();
 
     nice_assert_no_alloc::assert_no_alloc(|| {
@@ -163,7 +194,7 @@ fn lookahead_waits_for_main_or_sidechain_onset_before_starting_attack() {
 
     for mode in [OperatingMode::Track, OperatingMode::Sidechain] {
         let mut engine = Engine::new(48000.0);
-        engine.set_lookahead(true);
+        engine.configure_lookahead(true, LookaheadTime::default());
         let delay = engine.latency_samples();
         let mut controls = Controls {
             mode,

@@ -7,13 +7,15 @@ Release; no filter frequency is snapped while a band is still processing audio.
 
 ## Lookahead
 
-Enable **Lookahead** beside the header's mode selector to buffer audio while
+Use **Lookahead** in the toolbar below the spectrum to buffer audio while
 the detector analyzes the incoming signal. The setting is global, saved with the
-project, off by default and not automatable. The button shows Off or the active
-delay. It works in Track EQ and Sidechain EQ.
+project, off by default and not automatable. Choose Off, Minimum, 150, 200 or
+300 ms. The button shows the active delay. It works in Track EQ and Sidechain EQ.
 
-At 44.1 / 48 / 96 / 192 kHz the added delay is 150 ms. At 8 kHz it is about
-175.9 ms to accommodate the full analysis window and decoder lookahead.
+Minimum uses the common full-window and decoder budget: about 117.3 ms at
+48 kHz, or 175.9 ms at 8 kHz. The default enabled preset is 150 ms; presets below
+the required budget use that budget instead. Larger presets add waiting time,
+not analysis resolution. Changing detectors does not change the chosen latency.
 Audio Settings shows the actual sample count and duration, also reported to the
 host for delay compensation. Mix, Dry and Bypass retain the same delay.
 

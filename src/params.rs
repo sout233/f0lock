@@ -1,6 +1,7 @@
 use crate::{
     band::{BAND_COUNT, BandControl},
     filter::FilterKind,
+    lookahead::LookaheadTime,
     mode::OperatingMode,
     pitch::{DetectionMode, MAX_HZ, MIN_HZ, Target, TargetMode},
 };
@@ -20,6 +21,9 @@ pub struct F0Params {
     #[id = "lookahead"]
     pub lookahead: BoolParam,
 
+    #[id = "lookahead_time"]
+    pub lookahead_time: EnumParam<LookaheadTime>,
+
     #[persist = "ui_scale_percent"]
     pub ui_scale_percent: AtomicU32,
 
@@ -36,6 +40,8 @@ impl Default for F0Params {
             mode: EnumParam::new("Operating Mode", OperatingMode::Track),
             bypass: BoolParam::new("Bypass", false).make_bypass(),
             lookahead: BoolParam::new("Lookahead", false).non_automatable(),
+            lookahead_time: EnumParam::new("Lookahead Time", LookaheadTime::default())
+                .non_automatable(),
             ui_scale_percent: AtomicU32::new(100),
             track: ProcessingParams::new(""),
             sidechain: ProcessingParams::new("Sidechain "),

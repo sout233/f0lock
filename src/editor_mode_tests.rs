@@ -2,7 +2,7 @@ use super::*;
 use crate::{mode::OperatingMode, pitch::DetectionMode};
 
 #[test]
-fn header_mode_switch_restores_independent_point_and_global_parameters() {
+fn processing_bar_mode_switch_restores_independent_point_and_global_parameters() {
     let mut f = Fixture::new();
     f.add();
     assert_eq!(f.editor.selected, Some(1));
