@@ -26,7 +26,7 @@ fn probabilistic_thresholding_retains_competing_yin_minima() {
     curve[5] = 0.22;
     curve[10] = 0.08;
     let mut observations = Observations::default();
-    pyin_observations(&curve, &curve, 1000.0, &mut observations);
+    pyin_observations(&curve, &curve, 1000.0, &mut observations, Target::default());
 
     let active: Vec<_> = observations
         .probability

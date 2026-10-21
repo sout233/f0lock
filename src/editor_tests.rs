@@ -142,7 +142,22 @@ fn editor_renders_real_signal_and_exports_meshes() {
         (9.1, vec![entry_button(true)], None),
         (9.2, vec![entry_button(false)], None),
         (9.3, vec![], Some("numeric-entry")),
+        (10.0, vec![], Some("target-range")),
+        (11.0, vec![], Some("target-reference")),
     ] {
+        if time == 10.0 || time == 11.0 {
+            egui::Popup::close_all(&ctx);
+            let setter = editor.gui.as_ref().unwrap().param_setter();
+            set_value(
+                &setter,
+                &params.target_mode,
+                if time == 10.0 {
+                    crate::pitch::TargetMode::Range
+                } else {
+                    crate::pitch::TargetMode::Reference
+                },
+            );
+        }
         let input = egui::RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 684.0))),
             time: Some(time),

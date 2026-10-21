@@ -72,6 +72,43 @@ states clear only when the point becomes fully dry. Attack and Release begin
 when the detector reports its decision; they add to detection response time
 and do not add delay to the audio path.
 
+## Target selection
+
+The spectrum's **Target** button selects a global detection constraint. It
+does not change individual EQ points or their F0 ratios. All five Target
+parameters support host automation and project state restoration.
+
+- **Auto** is the default and retains unconstrained detection behavior.
+- **Range** accepts candidates between Minimum and Maximum (50–1000 Hz).
+  Drag the two blue boundaries or enter exact values in the Target popup.
+  The initial range is 100–600 Hz. An inverted range is visibly reported
+  as invalid and produces no valid detection; its endpoints are not swapped.
+- **Reference** accepts candidates within ±Tolerance semitones of Reference
+  and favors those nearer the reference on a logarithmic pitch scale. The
+  initial reference is 300 Hz with ±6 semitones; tolerance spans 1–24 semitones.
+  Drag the center line to move Reference and either boundary to change
+  Tolerance, or enter exact values. The displayed interval is intersected
+  with the detector's existing 50–1000 Hz operating range.
+
+Constraints apply before MPM peak selection and YIN threshold candidate
+selection, so an excluded candidate cannot consume the opportunity to select
+an eligible one. In manual Target modes, plain MPM selects among all eligible
+NSDF candidates using periodicity and spectral support; Auto retains its
+original 0.93 relative-peak selection. Enhanced modes retain their existing
+temporal decoders and Clarity checks.
+
+Reference weights are Gaussian in semitone distance and normalized to retain
+the original voiced probability mass. They change relative preference without
+increasing evidence for voicing. Changing Target mode clears decoder history.
+Frequency and tolerance automation retain the trajectory to permit continuous
+editing. Delayed decisions are checked against the current allowed interval,
+so no outside-range pitch from an earlier frame is emitted.
+No candidates means no valid F0, followed by the normal Release envelope.
+
+This is target guidance, not source separation or guaranteed voice identity.
+Overlapping voices and octave-related subharmonics can remain ambiguous;
+restricting the range does not make a low-Clarity candidate pass the threshold.
+
 Changing modes, resetting the plugin, or passing below Gate clears trajectory
 history. Clarity is still a periodicity threshold for the selected candidate,
 not a calibrated probability that the musical note is correct.

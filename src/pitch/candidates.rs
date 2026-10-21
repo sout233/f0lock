@@ -1,4 +1,4 @@
-use super::{BINS, MAX_HZ, MIN_HZ};
+use super::{BINS, MAX_HZ, MIN_HZ, Target, TargetMode};
 use pitch_estimate::McLeodDetector;
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex32};
 use std::sync::Arc;
@@ -110,13 +110,14 @@ pub(super) fn mpm_observations(
     rate: f32,
     evidence: &SpectralEvidence,
     out: &mut Observations,
+    target: Target,
 ) {
     let mut voiced = 0.0_f32;
 
     mpm.candidates(frame, rate.round() as u32, |pitch| {
         let hz = pitch.frequency * rate / rate.round();
 
-        if (MIN_HZ..=MAX_HZ).contains(&hz) {
+        if (MIN_HZ..=MAX_HZ).contains(&hz) && target.allows(hz) {
             voiced = voiced.max(pitch.clarity);
             let weight = (24.0 * (pitch.clarity - 1.0)).exp() * evidence.support(hz, rate);
             out.add(hz, pitch.clarity, weight);
@@ -137,6 +138,7 @@ pub(super) fn pyin_observations(
     difference: &[f32],
     rate: f32,
     out: &mut Observations,
+    target: Target,
 ) {
     // Beta(2, 18): CDF(x) = 1 - (1-x)^18 * (1+18x).
     // Integrate each of the paper's 100 threshold intervals exactly.
@@ -146,6 +148,7 @@ pub(super) fn pyin_observations(
     for i in 2..curve.len() - 1 {
         if curve[i] < curve[i - 1]
             && curve[i] <= curve[i + 1]
+            && (target.mode == TargetMode::Auto || target.allows(rate / refine(difference, i).0))
             && minimum.is_none_or(|previous| curve[i] < curve[previous])
         {
             minimum = Some(i);
@@ -160,7 +163,12 @@ pub(super) fn pyin_observations(
         let mut found = false;
 
         for i in 2..curve.len() - 1 {
-            if curve[i] < threshold && curve[i] < curve[i - 1] && curve[i] <= curve[i + 1] {
+            if curve[i] < threshold
+                && curve[i] < curve[i - 1]
+                && curve[i] <= curve[i + 1]
+                && (target.mode == TargetMode::Auto
+                    || target.allows(rate / refine(difference, i).0))
+            {
                 selected = i;
                 found = true;
                 break;

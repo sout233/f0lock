@@ -17,6 +17,8 @@ mod point_tabs;
 mod settings;
 #[path = "spectrum.rs"]
 mod spectrum;
+#[path = "target_ui.rs"]
+mod target_ui;
 use knob::{RED, gradient_rect};
 #[cfg(test)]
 #[path = "editor_points_tests.rs"]

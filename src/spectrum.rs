@@ -175,6 +175,8 @@ impl F0Editor {
             });
         }
 
+        self.target_controls(ui, plot.rect, plot.max_hz);
+
         let readout = if v[0] > 0.0 {
             format!("{:.1} Hz   {:.0}%", v[0], v[1] * 100.0)
         } else {

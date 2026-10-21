@@ -10,6 +10,9 @@ mod spectrum_tests;
 #[path = "editor_scale_tests.rs"]
 mod scale_tests;
 
+#[path = "editor_target_tests.rs"]
+mod target_tests;
+
 #[test]
 fn detection_menu_changes_global_algorithm_through_host_gestures() {
     use crate::pitch::DetectionMode;

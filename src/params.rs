@@ -1,7 +1,7 @@
 use crate::{
     band::{BAND_COUNT, BandControl},
     filter::FilterKind,
-    pitch::DetectionMode,
+    pitch::{DetectionMode, Target, TargetMode},
 };
 use nice_plug::prelude::*;
 use std::sync::atomic::AtomicU32;
@@ -12,6 +12,21 @@ pub const UI_SCALES: [u32; 8] = [75, 90, 100, 110, 125, 150, 175, 200];
 pub struct F0Params {
     #[id = "pitch_detection"]
     pub detection: EnumParam<DetectionMode>,
+
+    #[id = "target_mode"]
+    pub target_mode: EnumParam<TargetMode>,
+
+    #[id = "target_min"]
+    pub target_min: FloatParam,
+
+    #[id = "target_max"]
+    pub target_max: FloatParam,
+
+    #[id = "target_reference"]
+    pub target_reference: FloatParam,
+
+    #[id = "target_tolerance"]
+    pub target_tolerance: FloatParam,
 
     #[persist = "ui_scale_percent"]
     pub ui_scale_percent: AtomicU32,
@@ -66,6 +81,20 @@ impl Default for F0Params {
     fn default() -> Self {
         Self {
             detection: EnumParam::new("Pitch Detection", DetectionMode::Mpm),
+            target_mode: EnumParam::new("Target Mode", TargetMode::Auto),
+            target_min: target_frequency_param("Target Minimum", 100.0),
+            target_max: target_frequency_param("Target Maximum", 600.0),
+            target_reference: target_frequency_param("Target Reference", 300.0),
+            target_tolerance: FloatParam::new(
+                "Target Tolerance",
+                6.0,
+                FloatRange::Linear {
+                    min: 1.0,
+                    max: 24.0,
+                },
+            )
+            .with_unit(" st")
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
             ui_scale_percent: AtomicU32::new(100),
 
             gain: FloatParam::new(
@@ -209,6 +238,20 @@ fn ratio_param(name: impl Into<String>) -> FloatParam {
     .with_value_to_string(formatters::v2s_f32_rounded(3))
 }
 
+fn target_frequency_param(name: &str, default: f32) -> FloatParam {
+    FloatParam::new(
+        name,
+        default,
+        FloatRange::Skewed {
+            min: 50.0,
+            max: 1000.0,
+            factor: FloatRange::skew_factor(-1.0),
+        },
+    )
+    .with_unit(" Hz")
+    .with_value_to_string(formatters::v2s_f32_rounded(2))
+}
+
 impl BandParams {
     fn new(number: usize) -> Self {
         Self {
@@ -267,6 +310,16 @@ impl BandRef<'_> {
 }
 
 impl F0Params {
+    pub fn target(&self) -> Target {
+        Target {
+            mode: self.target_mode.value(),
+            minimum: self.target_min.value(),
+            maximum: self.target_max.value(),
+            reference: self.target_reference.value(),
+            tolerance: self.target_tolerance.value(),
+        }
+    }
+
     pub fn band(&self, index: usize) -> BandRef<'_> {
         if index == 0 {
             BandRef {

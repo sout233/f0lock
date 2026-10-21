@@ -1,5 +1,5 @@
 use crate::filter::{Coefficients, Svf};
-use crate::pitch::{DetectionMode, PitchTracking};
+use crate::pitch::{DetectionMode, PitchTracking, Target, TargetMode};
 use pitch_estimate::{McLeodDetector, PitchDetector};
 
 pub const WINDOW: usize = 1024;
@@ -14,6 +14,7 @@ pub struct Estimate {
 
 pub struct Detector {
     pub mode: DetectionMode,
+    pub target: Target,
     tracking: PitchTracking,
     pub rate: f32,
     decimation: usize,
@@ -40,6 +41,7 @@ impl Detector {
 
         Self {
             mode: DetectionMode::Mpm,
+            target: Target::default(),
             tracking: PitchTracking::new(rate, WINDOW, HOP),
             rate,
             decimation,
@@ -127,10 +129,14 @@ impl Detector {
             };
         }
 
-        if self.mode != DetectionMode::Mpm {
-            let (frequency, clarity) =
-                self.tracking
-                    .analyze(&self.frame, self.rate, &mut self.mpm, threshold);
+        if self.mode != DetectionMode::Mpm || self.target.mode != TargetMode::Auto {
+            let (frequency, clarity) = self.tracking.analyze(
+                &self.frame,
+                self.rate,
+                &mut self.mpm,
+                threshold,
+                self.target,
+            );
 
             return Estimate {
                 frequency,

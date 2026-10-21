@@ -201,6 +201,7 @@ impl Plugin for F0Lock {
             let controls = Controls {
                 bands: std::array::from_fn(|i| self.params.band(i).control()),
                 detection: self.params.detection.value(),
+                target: self.params.target(),
                 tracking_ms: self.params.tracking.value(),
                 attack_ms: self.params.attack.value(),
                 release_ms: self.params.release.value(),

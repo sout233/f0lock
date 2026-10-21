@@ -66,6 +66,11 @@ unsafe fn saved_band_state_round_trip(
 
         for (name, text) in [
             ("Pitch Detection", "pYIN"),
+            ("Target Mode", "Reference"),
+            ("Target Minimum", "150 Hz"),
+            ("Target Maximum", "700 Hz"),
+            ("Target Reference", "350 Hz"),
+            ("Target Tolerance", "7 st"),
             ("Attack", "25 ms"),
             ("Release", "250 ms"),
             ("Band 2 exists", "On"),
@@ -339,7 +344,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
 
         assert!(!params.is_null());
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 57);
+        assert_eq!(count, 62);
         let mut gain_id = None;
         let mut bypass_id = None;
 
