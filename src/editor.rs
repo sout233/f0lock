@@ -169,8 +169,8 @@ impl F0Editor {
             self.about_open = true;
         }
 
-        level_bar(&p, at(609.0, 25.0), v[5]);
-        level_bar(&p, at(609.0, 36.0), v[6]);
+        level_bar(&p, at(701.0, 25.0), v[5]);
+        level_bar(&p, at(701.0, 36.0), v[6]);
 
         self.spectrum(ui, Rect::from_min_max(at(20.0, 78.0), at(880.0, 278.0)), &v);
         self.processing_bar(ui, Rect::from_min_max(at(0.0, 282.0), at(900.0, 314.0)), &v);
