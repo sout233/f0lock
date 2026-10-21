@@ -125,15 +125,15 @@ impl F0Editor {
             at(28.0, 33.0),
             egui::Align2::LEFT_CENTER,
             "f0lock",
-            FontId::proportional(26.0),
-            Color32::from_black_alpha(160),
+            FontId::new(26.0, egui::FontFamily::Name(GLOBAL_FONT.into())),
+            Color32::from_black_alpha(136),
         );
         p.text(
             at(28.0, 31.0),
             egui::Align2::LEFT_CENTER,
             "f0lock",
-            FontId::proportional(26.0),
-            TEXT,
+            FontId::new(26.0, egui::FontFamily::Name(GLOBAL_FONT.into())),
+            TEXT.gamma_multiply(0.85),
         );
 
         if ui
