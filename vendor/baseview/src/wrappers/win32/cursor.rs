@@ -12,24 +12,27 @@ use windows_sys::{
 };
 
 #[derive(Copy, Clone)]
-pub struct SystemCursor(NonNull<c_void>);
+pub struct SystemCursor(Option<NonNull<c_void>>);
 
 impl SystemCursor {
     pub fn load(cursor: MouseCursor) -> Result<Self> {
+        if matches!(cursor, MouseCursor::Hidden) {
+            return Ok(Self(None));
+        }
         let cursor_ptr = cursor_to_lpcwstr(cursor);
 
         // SAFETY: the PCWSTR returned by cursor_to_lpcwstr is always a valid shared cursor ID
         let result = unsafe { LoadCursorW(null_mut(), cursor_ptr) };
 
         match NonNull::new(result) {
-            Some(res) => Ok(Self(res)),
+            Some(res) => Ok(Self(Some(res))),
             None => Err(Error::from_thread()),
         }
     }
 
     pub fn set(&self) {
-        // SAFETY: This type guarantees the HCURSOR was returned by a successful call to LoadCursorW
-        unsafe { SetCursor(self.0.as_ptr()) };
+        // SAFETY: The handle is a loaded shared cursor, or NULL to hide the cursor.
+        unsafe { SetCursor(self.0.map_or(null_mut(), NonNull::as_ptr)) };
     }
 }
 
@@ -39,8 +42,7 @@ fn cursor_to_lpcwstr(cursor: MouseCursor) -> PCWSTR {
         MouseCursor::Hand => IDC_HAND,
         MouseCursor::HandGrabbing => IDC_SIZEALL,
         MouseCursor::Help => IDC_HELP,
-        // an empty LPCWSTR results in the cursor being hidden
-        MouseCursor::Hidden => std::ptr::null(),
+        MouseCursor::Hidden => unreachable!("Hidden cursors do not load a resource"),
 
         MouseCursor::Text => IDC_IBEAM,
         MouseCursor::VerticalText => IDC_IBEAM,
@@ -76,5 +78,34 @@ fn cursor_to_lpcwstr(cursor: MouseCursor) -> PCWSTR {
 
         MouseCursor::ColResize => IDC_SIZEWE,
         MouseCursor::RowResize => IDC_SIZENS,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetCursor;
+
+    #[test]
+    fn hidden_cursor_sets_null_and_a_visible_cursor_can_be_restored() {
+        struct RestoreCursor(*mut c_void);
+
+        impl Drop for RestoreCursor {
+            fn drop(&mut self) {
+                unsafe { SetCursor(self.0) };
+            }
+        }
+
+        let _restore = RestoreCursor(unsafe { GetCursor() });
+        let visible = SystemCursor::load(MouseCursor::Default).unwrap();
+        visible.set();
+        let handle = unsafe { GetCursor() };
+        assert!(!handle.is_null());
+
+        SystemCursor::load(MouseCursor::Hidden).unwrap().set();
+        assert!(unsafe { GetCursor() }.is_null());
+
+        visible.set();
+        assert_eq!(unsafe { GetCursor() }, handle);
     }
 }

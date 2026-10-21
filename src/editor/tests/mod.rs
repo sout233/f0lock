@@ -63,6 +63,7 @@ struct Fixture {
     shapes: Vec<egui::epaint::ClippedShape>,
     viewport_commands: Vec<egui::ViewportCommand>,
     opened_urls: Vec<String>,
+    cursor_icon: egui::CursorIcon,
     time: f64,
 }
 
@@ -92,6 +93,7 @@ impl Fixture {
             shapes: Vec::new(),
             viewport_commands: Vec::new(),
             opened_urls: Vec::new(),
+            cursor_icon: egui::CursorIcon::Default,
             time: 0.0,
         };
 
@@ -111,6 +113,7 @@ impl Fixture {
             |ui| self.editor.draw(ui),
         );
         output.textures_delta.clear();
+        self.cursor_icon = output.platform_output.cursor_icon;
         self.opened_urls.extend(
             output
                 .platform_output

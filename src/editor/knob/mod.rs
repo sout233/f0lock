@@ -181,6 +181,11 @@ pub fn knob(
         )
         .on_hover_cursor(egui::CursorIcon::Grab);
 
+    #[cfg(target_os = "windows")]
+    if response.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_down()) {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::None);
+    }
+
     if response.clicked() {
         response.request_focus();
     }

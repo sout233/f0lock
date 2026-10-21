@@ -1,5 +1,40 @@
 use super::*;
 
+#[test]
+#[cfg(target_os = "windows")]
+fn primary_knob_press_hides_the_cursor_until_release() {
+    let mut f = Fixture::new();
+    let center = Pos2::new(65.0, 465.0);
+    f.frame(vec![egui::Event::PointerMoved(center)]);
+    assert_eq!(f.cursor_icon, egui::CursorIcon::Grab);
+
+    f.frame(vec![egui::Event::PointerButton {
+        pos: center,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Default::default(),
+    }]);
+    assert_eq!(f.cursor_icon, egui::CursorIcon::None);
+
+    for position in [Pos2::new(285.0, 465.0), Pos2::new(0.0, 0.0)] {
+        f.frame(vec![egui::Event::PointerMoved(position)]);
+        assert_eq!(f.cursor_icon, egui::CursorIcon::None);
+    }
+
+    f.frame(vec![egui::Event::PointerButton {
+        pos: Pos2::ZERO,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: Default::default(),
+    }]);
+    assert_ne!(f.cursor_icon, egui::CursorIcon::None);
+    f.frame(vec![egui::Event::PointerMoved(center)]);
+    assert_eq!(f.cursor_icon, egui::CursorIcon::Grab);
+
+    f.click(center, egui::PointerButton::Secondary);
+    assert_ne!(f.cursor_icon, egui::CursorIcon::None);
+}
+
 fn input_frame(
     ctx: &egui::Context,
     editor: &mut F0Editor,
