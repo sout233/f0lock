@@ -24,9 +24,18 @@ impl F0Editor {
             let response =
                 ui.interact(tab, ui.make_persistent_id(("point-tab", i)), Sense::click());
 
-            if response.clicked() {
+            if response.clicked() || response.secondary_clicked() {
                 self.selected = Some(i);
             }
+
+            if response.clicked_by(egui::PointerButton::Middle) {
+                if let Some(gui) = &self.gui {
+                    set_value(&gui.param_setter(), self.params.band(i).exists, false);
+                    self.notice = None;
+                }
+            }
+
+            response.context_menu(|ui| self.point_menu(ui, i));
 
             let selected = self.selected == Some(i);
             p.rect_filled(
@@ -65,6 +74,10 @@ impl F0Editor {
             x += 101.0;
         }
 
+        if (0..BAND_COUNT).all(|i| self.params.band(i).exists.value()) {
+            return;
+        }
+
         let button = Rect::from_min_size(Pos2::new(x, rect.top() + 4.0), Vec2::new(30.0, 25.0));
         let response = ui.interact(button, ui.make_persistent_id("add-point"), Sense::click());
         p.rect_filled(
@@ -81,15 +94,56 @@ impl F0Editor {
         );
 
         if response.clicked() {
-            self.add_default_point(ui.ctx());
+            self.add_default_point();
         }
     }
 
-    fn add_default_point(&mut self, ctx: &egui::Context) {
-        let Some(index) = (0..BAND_COUNT).find(|&i| !self.params.band(i).exists.value()) else {
-            self.notify(ctx, "All 8 points are in use");
-            return;
-        };
+    pub(super) fn point_menu(&mut self, ui: &mut egui::Ui, index: usize) {
+        let Some(gui) = &self.gui else { return };
+        let setter = gui.param_setter();
+        let b = self.params.band(index);
+        ui.label(format!("Point {}", index + 1));
+        ui.menu_button("Type", |ui| {
+            for kind in FilterKind::ALL {
+                if ui
+                    .selectable_label(b.kind.value() == kind, kind.label())
+                    .clicked()
+                {
+                    set_value(&setter, b.kind, kind);
+                    egui::Popup::close_all(ui.ctx());
+                }
+            }
+        });
+
+        if ui
+            .button(if b.enabled.value() {
+                "Bypass"
+            } else {
+                "Enable"
+            })
+            .clicked()
+        {
+            set_value(&setter, b.enabled, !b.enabled.value());
+            egui::Popup::close_all(ui.ctx());
+        }
+
+        if ui.button("Reset gain / Q").clicked() {
+            set_value(&setter, b.gain, 0.0);
+            set_value(&setter, b.q, 3.0);
+            egui::Popup::close_all(ui.ctx());
+        }
+
+        if ui.button("Delete").clicked() {
+            set_value(&setter, b.exists, false);
+            self.notice = None;
+            egui::Popup::close_all(ui.ctx());
+        }
+    }
+
+    fn add_default_point(&mut self) {
+        let index = (0..BAND_COUNT)
+            .find(|&i| !self.params.band(i).exists.value())
+            .expect("Add point button requires a free slot");
 
         let Some(gui) = &self.gui else {
             return;
@@ -106,13 +160,6 @@ impl F0Editor {
 
         self.selected = Some(index);
         self.notice = None;
-    }
-
-    fn notify(&mut self, ctx: &egui::Context, message: &'static str) {
-        self.notice = Some(Notice {
-            message,
-            expires_at: ctx.input(|i| i.time) + 4.0,
-        });
     }
 
     pub(super) fn show_notice(&mut self, ctx: &egui::Context, origin: Pos2) {

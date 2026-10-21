@@ -144,47 +144,7 @@ impl F0Editor {
         if self.context_point.is_some() {
             response.context_menu(|ui| {
                 if let Some(index) = self.context_point {
-                    let b = self.params.band(index);
-
-                    if let Some(gui) = &self.gui {
-                        let setter = gui.param_setter();
-                        ui.label(format!("Point {}", index + 1));
-                        ui.menu_button("Type", |ui| {
-                            for kind in FilterKind::ALL {
-                                if ui
-                                    .selectable_label(b.kind.value() == kind, kind.label())
-                                    .clicked()
-                                {
-                                    set_value(&setter, b.kind, kind);
-                                    egui::Popup::close_all(ui.ctx());
-                                }
-                            }
-                        });
-
-                        if ui
-                            .button(if b.enabled.value() {
-                                "Bypass"
-                            } else {
-                                "Enable"
-                            })
-                            .clicked()
-                        {
-                            set_value(&setter, b.enabled, !b.enabled.value());
-                            egui::Popup::close_all(ui.ctx());
-                        }
-
-                        if ui.button("Reset gain / Q").clicked() {
-                            set_value(&setter, b.gain, 0.0);
-                            set_value(&setter, b.q, 3.0);
-                            egui::Popup::close_all(ui.ctx());
-                        }
-
-                        if ui.button("Delete").clicked() {
-                            set_value(&setter, b.exists, false);
-                            self.notice = None;
-                            egui::Popup::close_all(ui.ctx());
-                        }
-                    }
+                    self.point_menu(ui, index);
                 }
             });
         }

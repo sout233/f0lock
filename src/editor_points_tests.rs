@@ -206,12 +206,9 @@ fn plus_adds_all_harmonics_without_audio_and_uses_tabs() {
         assert_eq!(f.editor.selected, Some(i));
         assert!(f.editor.notice.is_none());
     }
-    f.add();
-
-    assert_eq!(
-        f.editor.notice.as_ref().unwrap().message,
-        "All 8 points are in use"
-    );
+    f.frame(vec![]);
+    assert!(!f.shapes.iter().any(|s| matches!(&s.shape,
+        egui::Shape::Text(t) if t.galley.job.text == "+")));
     assert_eq!(
         (0..BAND_COUNT)
             .filter(|&i| f.editor.params.band(i).exists.value())
@@ -472,6 +469,61 @@ fn spectrum_type_submenu_fits_at_right_edge() {
 }
 
 #[test]
+fn tab_context_menu_edits_the_clicked_point_and_deletes_it() {
+    let mut f = Fixture::new();
+    f.add();
+    f.click_text("Point 1");
+    let tab = Pos2::new(169.0, 330.0);
+    f.click(tab, egui::PointerButton::Secondary);
+    f.click_text("Type");
+    f.click_text("Notch");
+
+    assert_eq!(f.editor.selected, Some(1));
+    assert_eq!(f.editor.params.band(1).kind.value(), FilterKind::Notch);
+    assert_eq!(f.editor.params.band(0).kind.value(), FilterKind::Peak);
+
+    f.click(tab, egui::PointerButton::Secondary);
+    f.click_text("Bypass");
+    assert!(!f.editor.params.band(1).enabled.value());
+
+    f.click(tab, egui::PointerButton::Secondary);
+    f.click_text("Reset gain / Q");
+    assert_eq!(f.editor.params.band(1).gain.value(), 0.0);
+    assert!((f.editor.params.band(1).q.value() - 3.0).abs() < 1e-5);
+
+    f.click(tab, egui::PointerButton::Secondary);
+    f.click_text("Delete");
+    f.frame(vec![]);
+    assert!(!f.editor.params.band(1).exists.value());
+    assert_eq!(f.editor.selected, Some(0));
+}
+
+#[test]
+fn middle_click_deletes_a_tab_and_restores_the_add_button() {
+    let mut f = Fixture::new();
+    for _ in 1..BAND_COUNT {
+        f.add();
+    }
+    f.host.events.lock().unwrap().clear();
+    f.click(Pos2::new(68.0, 330.0), egui::PointerButton::Middle);
+    f.frame(vec![]);
+
+    assert!(!f.editor.params.band(0).exists.value());
+    assert_eq!(f.editor.selected, Some(7));
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+    f.add();
+    assert!(f.editor.params.band(0).exists.value());
+    assert_eq!(f.editor.selected, Some(0));
+
+    let mut single = Fixture::new();
+    single.click(Pos2::new(68.0, 330.0), egui::PointerButton::Middle);
+    single.frame(vec![]);
+    assert_eq!(single.editor.selected, None);
+    single.add();
+    assert_eq!(single.editor.selected, Some(0));
+}
+
+#[test]
 fn context_menu_and_type_panel_manage_tab_points() {
     let mut f = Fixture::new();
     f.add();
@@ -663,17 +715,17 @@ fn header_menu_changes_ui_scale_without_editing_audio_parameters() {
 #[test]
 fn notifications_popup_at_top_left_and_expire() {
     let mut f = Fixture::new();
-
-    for _ in 1..BAND_COUNT {
-        f.add();
-    }
-    f.add();
+    f.editor.notice = Some(Notice {
+        message: "Test notification",
+        expires_at: f.time + 4.0,
+    });
+    f.frame(vec![]);
     f.frame(vec![]);
     let message = f
         .shapes
         .iter()
         .find_map(|s| match &s.shape {
-            egui::Shape::Text(t) if t.galley.job.text == "All 8 points are in use" => {
+            egui::Shape::Text(t) if t.galley.job.text == "Test notification" => {
                 Some(s.shape.visual_bounding_rect())
             }
             _ => None,
