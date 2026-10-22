@@ -90,10 +90,7 @@ jobs:
 
       - name: Validate Audio Unit without a separately installed CLAP
         if: matrix.platform == 'macos'
-        run: |
-          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-          ditto target/bundled/f0lock.component "$HOME/Library/Audio/Plug-Ins/Components/f0lock.component"
-          auval -strict -v aufx F0lk Sout
+        run: python tools/ci/validate_au.py
 
       - name: Package Linux archive
         if: matrix.platform == 'linux'

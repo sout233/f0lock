@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.27)
 
 if(NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     message(FATAL_ERROR "Building the Audio Unit requires macOS and Xcode command line tools")

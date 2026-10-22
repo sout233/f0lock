@@ -11,7 +11,7 @@ The macOS ZIP and PKG include AU, CLAP and VST3.
 
 ## Build on macOS
 
-Install Rust, CMake and Xcode command line tools, then run:
+Install Rust, CMake 3.27+ and Xcode command line tools, then run:
 
 ```sh
 cargo xtask bundle-universal f0lock --release --locked
