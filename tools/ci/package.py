@@ -12,6 +12,11 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+MACOS_FORMATS = [
+    ("f0lock.clap", "CLAP"),
+    ("f0lock.vst3", "VST3"),
+    ("f0lock.component", "Components"),
+]
 
 
 def validate_binary(path, platform):
@@ -32,7 +37,12 @@ def validate_binary(path, platform):
 
 def populate(stage, platform):
     bundle = ROOT / "target/bundled"
-    for name in ["f0lock.clap", "f0lock.vst3"]:
+    names = (
+        [name for name, _ in MACOS_FORMATS]
+        if platform == "macos"
+        else ["f0lock.clap", "f0lock.vst3"]
+    )
+    for name in names:
         source = bundle / name
         if source.is_dir():
             shutil.copytree(source, stage / name, symlinks=True)
@@ -76,6 +86,9 @@ def populate(stage, platform):
             )
     for name, source in sources.items():
         shutil.copy2(source, licenses / name)
+    if platform == "macos":
+        for name in ["clap-wrapper-MIT.txt", "clap-MIT.txt", "AudioUnitSDK.txt"]:
+            shutil.copy2(bundle / "au-licenses" / name, licenses / name)
 
     instructions = {
         "windows": (
@@ -85,12 +98,14 @@ def populate(stage, platform):
         ),
         "macos": (
             "Requires macOS 14 or newer; supports Apple Silicon and Intel.\n"
-            "Run the PKG to install both formats for all users.\n"
+            "Run the PKG to install AU, CLAP and VST3 for all users.\n"
             "Or copy the bundles into ~/Library/Audio/Plug-Ins/CLAP/\n"
-            "and ~/Library/Audio/Plug-Ins/VST3/ for the current user.\n"
+            "and ~/Library/Audio/Plug-Ins/VST3/ for the current user;\n"
+            "copy f0lock.component into ~/Library/Audio/Plug-Ins/Components/.\n"
+            "In Logic Pro, insert Audio FX > Audio Units > sout > f0lock.\n"
+            "The AU includes its own engine; a separate CLAP installation is not required.\n"
             "These builds are ad-hoc signed, without Developer ID or notarization.\n"
             "The PKG is unsigned; macOS may require approval in Privacy & Security.\n"
-            "Audio Units (AU) are not included; Logic Pro requires AU.\n"
         ),
         "linux": (
             "Requires x86_64 Linux, glibc 2.35 or newer, X11 and OpenGL.\n"
@@ -135,9 +150,30 @@ def windows_package(stage, output, version, compiler):
             raise ValueError(f"Corrupt archive: {destination}")
 
 
+def validate_audio_unit(bundle):
+    with (bundle / "Contents/Info.plist").open("rb") as source:
+        metadata = plistlib.load(source)
+    components = metadata["AudioComponents"]
+    identities = [(c["type"], c["subtype"], c["manufacturer"]) for c in components]
+    if identities != [("aufx", "F0lk", "Sout")]:
+        raise ValueError(f"Unexpected Audio Unit identity: {identities}")
+    if components[0]["name"] != "sout: f0lock" or not components[0]["factoryFunction"]:
+        raise ValueError("Audio Unit name or factory entry point is missing")
+    for path in [bundle / "Contents/MacOS/f0lock",
+                 bundle / "Contents/PlugIns/f0lock.clap/Contents/MacOS/f0lock"]:
+        if not path.is_file():
+            raise FileNotFoundError(path)
+
+
 def macos_package(stage, output, version):
-    for name in ["f0lock.clap", "f0lock.vst3"]:
+    for name, _ in MACOS_FORMATS:
         bundle = stage / name
+        if name == "f0lock.component":
+            validate_audio_unit(bundle)
+            # Metadata and code signatures must match the packaged CLAP. Copy the
+            # already signed engine before signing the enclosing AU, inside out.
+            embedded = bundle / "Contents/PlugIns/f0lock.clap"
+            shutil.copytree(stage / "f0lock.clap", embedded, symlinks=True, dirs_exist_ok=True)
         plist_path = bundle / "Contents/Info.plist"
         with plist_path.open("rb") as source:
             metadata = plistlib.load(source)
@@ -169,7 +205,7 @@ def macos_package(stage, output, version):
         )
 
     payload = stage.parent / "pkg-root"
-    for name, directory in [("f0lock.clap", "CLAP"), ("f0lock.vst3", "VST3")]:
+    for name, directory in MACOS_FORMATS:
         destination = payload / "Library/Audio/Plug-Ins" / directory / name
         shutil.copytree(stage / name, destination, symlinks=True)
     support = payload / "Library/Application Support/f0lock"

@@ -17,6 +17,9 @@ cargo xtask bundle f0lock --release --locked
 
 spits out `target/bundled/f0lock.clap` and `target/bundled/f0lock.vst3/`.
 
+macOS packages also include Audio Unit (`f0lock.component`) for Logic Pro.
+See [AU installation & building](docs/audio-unit.md).
+
 Windows frontend runs on wgpu / D3D12, so your box and GPU need legit D3D12 support; if init dies, it fails loudly with an error instead of silently falling back to buggy OpenGL!!!
 
 you can also fire it up standalone to check audio devices and the UI without a host:

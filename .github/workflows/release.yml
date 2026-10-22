@@ -43,6 +43,9 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Test packaging
+        run: python -m unittest discover -s tools/ci -p 'test_*.py'
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.targets }}
@@ -77,9 +80,20 @@ jobs:
           ISCC: 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
         run: python tools/ci/package.py windows --iscc "$ISCC"
 
+      - name: Build macOS Universal Audio Unit
+        if: matrix.platform == 'macos'
+        run: python tools/ci/build_au.py
+
       - name: Package macOS installer and archive
         if: matrix.platform == 'macos'
         run: python tools/ci/package.py macos
+
+      - name: Validate Audio Unit without a separately installed CLAP
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto target/bundled/f0lock.component "$HOME/Library/Audio/Plug-Ins/Components/f0lock.component"
+          auval -strict -v aufx F0lk Sout
 
       - name: Package Linux archive
         if: matrix.platform == 'linux'
