@@ -1,6 +1,5 @@
 """Install only the AU on an isolated macOS CI runner and run Apple's validator."""
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,17 +13,20 @@ def main():
 
     component = ROOT / "target/bundled/f0lock.component"
     validate_audio_unit(component)
-    destination = Path.home() / "Library/Audio/Plug-Ins/Components/f0lock.component"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(component, destination, symlinks=True)
+    destination = Path("/Library/Audio/Plug-Ins/Components/f0lock.component")
+    subprocess.run(["sudo", "ditto", str(component), str(destination)], check=True)
     subprocess.run(["plutil", "-p", str(destination / "Contents/Info.plist")], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(destination)], check=True)
+    inspector = ROOT / "target/au-inspect"
+    subprocess.run(["xcrun", "clang++", "-std=c++17", str(ROOT / "tools/ci/inspect_au.cpp"),
+                    "-framework", "CoreFoundation", "-o", str(inspector)], check=True)
+    subprocess.run([str(inspector), str(destination)], check=True)
 
     # AU discovery is cached by a separate process. A direct file copy does not
     # guarantee an immediate rescan; restart the registrar before enumeration.
     registrar = subprocess.run(["pgrep", "-x", "AudioComponentRegistrar"], capture_output=True, text=True)
     if registrar.returncode == 0:
-        subprocess.run(["killall", "AudioComponentRegistrar"], check=True)
+        subprocess.run(["sudo", "killall", "-9", "AudioComponentRegistrar"], check=True)
         print("Restarted AudioComponentRegistrar for AU discovery", flush=True)
     elif registrar.returncode == 1:
         print("AudioComponentRegistrar is not running; AU enumeration will start it", flush=True)
