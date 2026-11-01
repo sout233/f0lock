@@ -28,6 +28,13 @@ impl F0Editor {
                 self.selected = Some(i);
             }
 
+            if response.double_clicked()
+                && let Some(gui) = &self.gui
+            {
+                let band = self.params.band(i);
+                set_value(&gui.param_setter(), band.enabled, !band.enabled.value());
+            }
+
             if response.clicked_by(egui::PointerButton::Middle) {
                 if let Some(gui) = &self.gui {
                     set_value(&gui.param_setter(), self.params.band(i).exists, false);
@@ -37,6 +44,17 @@ impl F0Editor {
 
             response.context_menu(|ui| self.point_menu(ui, i));
 
+            let enabled = self.params.band(i).enabled.value();
+            let response = response.on_hover_text(if enabled {
+                "Double-click to bypass"
+            } else {
+                "Bypassed · Double-click to enable"
+            });
+            let color = if enabled {
+                color
+            } else {
+                Color32::from_gray(91)
+            };
             let selected = self.selected == Some(i);
             p.rect_filled(
                 tab,
@@ -69,7 +87,13 @@ impl F0Editor {
                 egui::Align2::CENTER_CENTER,
                 format!("Point {}", i + 1),
                 FontId::proportional(12.0),
-                if selected { Color32::WHITE } else { TEXT },
+                if !enabled {
+                    Color32::from_gray(130)
+                } else if selected {
+                    Color32::WHITE
+                } else {
+                    TEXT
+                },
             );
             x += 101.0;
         }

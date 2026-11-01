@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn double_clicking_point_tab_toggles_only_that_points_bypass_through_host_gestures() {
+    let mut f = Fixture::new();
+    f.add();
+    f.click_text("Point 1");
+    let gain = f.editor.params.band(1).gain.value();
+    let ratio = f.editor.params.band(1).ratio.value();
+    // Keep setup clicks outside this double-click gesture's time window.
+    f.time += 1.0;
+    f.host.events.lock().unwrap().clear();
+
+    f.click_text("Point 2");
+    assert_eq!(f.editor.selected, Some(1));
+    assert!(f.editor.params.band(1).enabled.value());
+    assert!(f.host.events.lock().unwrap().is_empty());
+
+    f.click_text("Point 2");
+    assert!(!f.editor.params.band(1).enabled.value());
+    assert!(f.editor.params.band(1).exists.value());
+    assert!(f.editor.params.band(0).enabled.value());
+    assert!(!f.editor.params.bypass.value());
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+    assert!(f.shapes.iter().any(|s| matches!(&s.shape,
+        egui::Shape::Text(t) if t.galley.job.text == "Point 2"
+            && t.galley.job.sections[0].format.color == Color32::from_gray(130))));
+
+    // Start a separate double-click gesture after the multi-click timeout.
+    f.time += 1.0;
+    f.host.events.lock().unwrap().clear();
+    f.click_text("Point 2");
+    assert!(!f.editor.params.band(1).enabled.value());
+    assert!(f.host.events.lock().unwrap().is_empty());
+    f.click_text("Point 2");
+    assert!(f.editor.params.band(1).enabled.value());
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+    assert_eq!(f.editor.params.band(1).gain.value(), gain);
+    assert_eq!(f.editor.params.band(1).ratio.value(), ratio);
+}
+
+#[test]
 fn detection_menu_changes_global_algorithm_through_host_gestures() {
     use crate::pitch::DetectionMode;
 
