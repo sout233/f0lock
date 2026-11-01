@@ -1,5 +1,5 @@
 use super::*;
-use crate::midi::PitchSource;
+use crate::midi::{MidiMode, PitchSource};
 use crate::pitch::{DetectionMode, DetectionRange};
 use std::sync::atomic::Ordering;
 
@@ -195,15 +195,28 @@ impl F0Editor {
                 let midi = params.pitch_source.value() == PitchSource::Midi;
                 if midi {
                     ui.horizontal(|ui| {
+                        ui.label("MIDI Mode");
+                        egui::ComboBox::from_id_salt("midi-mode")
+                            .selected_text(params.midi_mode.value().label())
+                            .show_ui(ui, |ui| {
+                                for mode in MidiMode::ALL {
+                                    if ui.selectable_label(params.midi_mode.value() == mode, mode.label()).clicked() {
+                                        set_value(&setter, &params.midi_mode, mode);
+                                    }
+                                }
+                            });
+                    });
+                    ui.horizontal(|ui| {
                         ui.label("Pitch Bend ±");
                         let mut value = params.midi_bend_range.value();
                         if ui.add(egui::DragValue::new(&mut value).range(1..=24).suffix(" st")).changed() {
                             set_value(&setter, &params.midi_bend_range, value);
                         }
                     });
-                    ui.label(egui::RichText::new(
-                        "Latest held note wins. Audio detection, Target, Gate and Clarity do not affect MIDI pitch."
-                    ).size(11.0).color(MUTED));
+                    let hint = if params.midi_mode.value() == MidiMode::Poly {
+                        "Each point follows one note. New notes use free points, then steal the oldest note. Point Ratio still applies."
+                    } else { "Latest held note wins. Audio detection, Target, Gate and Clarity do not affect MIDI pitch." };
+                    ui.label(egui::RichText::new(hint).size(11.0).color(MUTED));
                 }
                 ui.add_enabled_ui(!midi, |ui| {
                 ui.horizontal(|ui| {

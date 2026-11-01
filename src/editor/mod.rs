@@ -61,6 +61,21 @@ const POINT_COLORS: [Color32; BAND_COUNT] = [
 const PREVIEW_F0: f32 = 150.0;
 
 impl F0Editor {
+    fn midi_poly(&self) -> bool {
+        self.params.pitch_source.value() == crate::midi::PitchSource::Midi
+            && self.params.midi_mode.value() == crate::midi::MidiMode::Poly
+    }
+
+    fn point_pitch(&self, index: usize, fallback: f32) -> f32 {
+        if self.midi_poly() {
+            let frequency = self.telemetry.point_pitch(index);
+            if frequency > 0.0 {
+                return frequency;
+            }
+        }
+        fallback
+    }
+
     pub(crate) fn new(params: Arc<F0Params>, telemetry: Arc<Telemetry>) -> Self {
         let selected = (0..BAND_COUNT).find(|&i| params.band(i).exists.value());
         let shown_mode = params.mode.value();

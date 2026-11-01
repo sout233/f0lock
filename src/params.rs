@@ -3,7 +3,7 @@ use crate::{
     dynamics::DynamicParams,
     filter::{CutSlope, FilterKind},
     lookahead::LookaheadTime,
-    midi::PitchSource,
+    midi::{MidiMode, PitchSource},
     mode::OperatingMode,
     pitch::{DetectionMode, DetectionRange, EXTENDED_MIN_HZ, MAX_HZ, Target, TargetMode},
 };
@@ -35,6 +35,9 @@ pub struct F0Params {
     #[id = "midi_bend_range"]
     pub midi_bend_range: IntParam,
 
+    #[id = "midi_mode"]
+    pub midi_mode: EnumParam<MidiMode>,
+
     #[persist = "ui_scale_percent"]
     pub ui_scale_percent: AtomicU32,
 
@@ -63,6 +66,7 @@ impl Default for F0Params {
             )
             .with_unit(" st")
             .non_automatable(),
+            midi_mode: EnumParam::new("MIDI Mode", MidiMode::default()).non_automatable(),
             ui_scale_percent: AtomicU32::new(100),
             track: ProcessingParams::new(""),
             sidechain: ProcessingParams::new("Sidechain "),

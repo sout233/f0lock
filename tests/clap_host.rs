@@ -277,6 +277,15 @@ unsafe fn render_with_sidechain(
     gain_event: Option<(u32, f64)>,
     sidechain_hz: Option<f32>,
 ) -> f64 {
+    unsafe { render_tone(plugin, gain_event, sidechain_hz, 220.0) }
+}
+
+unsafe fn render_tone(
+    plugin: *const clap_plugin,
+    gain_event: Option<(u32, f64)>,
+    sidechain_hz: Option<f32>,
+    main_hz: f32,
+) -> f64 {
     let mut event = gain_event.map(|(param_id, value)| clap_event_param_value {
         header: clap_event_header {
             size: size_of::<clap_event_param_value>() as u32,
@@ -322,7 +331,7 @@ unsafe fn render_with_sidechain(
         let mut out_right = [f32::NAN; 512];
 
         for i in 0..frames {
-            left[i] = 0.1 * (std::f32::consts::TAU * 220.0 * (total + i) as f32 / 48000.0).sin();
+            left[i] = 0.1 * (std::f32::consts::TAU * main_hz * (total + i) as f32 / 48000.0).sin();
             right[i] = -left[i];
             if let Some(hz) = sidechain_hz {
                 sc_left[i] =
@@ -442,7 +451,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         assert_eq!(sidechain_info.channel_count, 2);
         assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 227);
+        assert_eq!(count, 228);
         let mut gain_id = None;
         let mut bypass_id = None;
 

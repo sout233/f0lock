@@ -49,6 +49,7 @@ pub struct Frame {
     pub estimate: Option<Estimate>,
     pub source_active: bool,
     pub prelock: Option<Estimate>,
+    pub midi_frequencies: Option<[f32; crate::band::BAND_COUNT]>,
 }
 
 pub struct Decision {
@@ -56,6 +57,7 @@ pub struct Decision {
     pub age: usize,
     pub prelock_age: Option<usize>,
     pub estimate: Estimate,
+    pub midi_frequencies: Option<[f32; crate::band::BAND_COUNT]>,
 }
 
 /// Audio, automation and dated pitch decisions share the same sample clock.
@@ -127,6 +129,7 @@ impl Lookahead {
         decision: Option<Decision>,
         changed_source: bool,
     ) -> Option<Frame> {
+        let midi_frequencies = decision.as_ref().and_then(|d| d.midi_frequencies);
         if !self.enabled {
             return Some(Frame {
                 audio,
@@ -139,6 +142,7 @@ impl Lookahead {
                 },
                 source_active: true,
                 prelock: None,
+                midi_frequencies,
             });
         }
 
@@ -156,6 +160,7 @@ impl Lookahead {
             estimate: changed_source.then_some(Estimate::default()),
             source_active: source[0].abs().max(source[1].abs()) >= self.gate_amplitude,
             prelock: None,
+            midi_frequencies: None,
         };
 
         if let Some(Decision {
@@ -163,6 +168,7 @@ impl Lookahead {
             age,
             prelock_age,
             estimate,
+            midi_frequencies,
         }) = decision
         {
             assert!(
@@ -175,6 +181,7 @@ impl Lookahead {
             );
             let index = ((self.time - age as u64) % capacity) as usize;
             self.frames[index].estimate = Some(estimate);
+            self.frames[index].midi_frequencies = midi_frequencies;
 
             if let Some(start) = prelock_age {
                 assert!(start >= age && start <= self.latency_samples());

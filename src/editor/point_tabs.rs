@@ -175,7 +175,15 @@ impl F0Editor {
 
         let setter = gui.param_setter();
         let band = self.params.band(index);
-        set_value(&setter, band.ratio, (index + 1) as f32);
+        set_value(
+            &setter,
+            band.ratio,
+            if self.midi_poly() {
+                1.0
+            } else {
+                (index + 1) as f32
+            },
+        );
         set_value(&setter, band.gain, if index == 0 { -6.0 } else { 0.0 });
         set_value(&setter, band.q, 3.0);
         set_value(&setter, band.kind, FilterKind::Peak);

@@ -1,5 +1,27 @@
+use crate::band::BAND_COUNT;
 use nice_plug::midi::{Channel, Key, VoiceID};
 use nice_plug::prelude::*;
+
+#[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum MidiMode {
+    #[default]
+    #[id = "mono"]
+    #[name = "Mono"]
+    Mono,
+    #[id = "poly"]
+    #[name = "Poly: one note per point"]
+    Poly,
+}
+
+impl MidiMode {
+    pub const ALL: [Self; 2] = [Self::Mono, Self::Poly];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mono => "Mono",
+            Self::Poly => "Poly: one note per point",
+        }
+    }
+}
 
 #[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum PitchSource {
@@ -30,6 +52,7 @@ struct HeldNote {
     voice_id: VoiceID,
     tuning: f32,
     pressed: bool,
+    slot: Option<usize>,
 }
 
 impl HeldNote {
@@ -39,6 +62,7 @@ impl HeldNote {
         voice_id: VoiceID::Wildcard,
         tuning: 0.0,
         pressed: false,
+        slot: None,
     };
 
     fn matches(self, voice_id: VoiceID, channel: Channel, key: Key) -> bool {
@@ -56,6 +80,8 @@ pub struct MidiTracker {
     sustain: [bool; 16],
     bend_range: f32,
     frequency: f32,
+    point_mask: u8,
+    point_frequencies: [f32; BAND_COUNT],
 }
 
 impl Default for MidiTracker {
@@ -67,6 +93,8 @@ impl Default for MidiTracker {
             sustain: [false; 16],
             bend_range: 2.0,
             frequency: 0.0,
+            point_mask: 1,
+            point_frequencies: [0.0; BAND_COUNT],
         }
     }
 }
@@ -77,10 +105,47 @@ impl MidiTracker {
         self.bend.fill(0.0);
         self.sustain.fill(false);
         self.frequency = 0.0;
+        self.point_frequencies.fill(0.0);
     }
 
     pub fn frequency(&self) -> f32 {
         self.frequency
+    }
+
+    pub fn point_frequencies(&self) -> [f32; BAND_COUNT] {
+        self.point_frequencies
+    }
+
+    pub fn set_point_mask(&mut self, mask: u8) {
+        if self.point_mask != mask {
+            self.point_mask = mask;
+            self.refresh();
+        }
+    }
+
+    fn assign_new_note(&mut self) {
+        let mut occupied = 0_u8;
+        for note in &self.notes[..self.len - 1] {
+            if let Some(slot) = note.slot {
+                occupied |= 1 << slot;
+            }
+        }
+        let free = self.point_mask & !occupied;
+        let slot = if free != 0 {
+            Some(free.trailing_zeros() as usize)
+        } else {
+            self.notes[..self.len - 1]
+                .iter_mut()
+                .find_map(|note| note.slot.take())
+        };
+        self.notes[self.len - 1].slot = slot;
+    }
+
+    fn note_frequency(&self, note: HeldNote) -> f32 {
+        let pitch = f32::from(note.key)
+            + self.bend[usize::from(note.channel)] * self.bend_range
+            + note.tuning;
+        440.0 * 2.0_f32.powf((pitch - 69.0) / 12.0)
     }
 
     pub fn set_bend_range(&mut self, semitones: f32) {
@@ -113,14 +178,38 @@ impl MidiTracker {
     }
 
     fn refresh(&mut self) {
+        let mut occupied = 0_u8;
+        for note in &mut self.notes[..self.len] {
+            if let Some(slot) = note.slot {
+                if self.point_mask & (1 << slot) == 0 {
+                    note.slot = None;
+                } else {
+                    occupied |= 1 << slot;
+                }
+            }
+        }
+        // Fill released/newly enabled points from the newest waiting notes.
+        for note in self.notes[..self.len].iter_mut().rev() {
+            let free = self.point_mask & !occupied;
+            if free == 0 {
+                break;
+            }
+            if note.slot.is_none() {
+                let slot = free.trailing_zeros() as usize;
+                note.slot = Some(slot);
+                occupied |= 1 << slot;
+            }
+        }
+        self.point_frequencies.fill(0.0);
+        for note in &self.notes[..self.len] {
+            if let Some(slot) = note.slot {
+                self.point_frequencies[slot] = self.note_frequency(*note);
+            }
+        }
         self.frequency = if self.len == 0 {
             0.0
         } else {
-            let note = self.notes[self.len - 1];
-            let pitch = f32::from(note.key)
-                + self.bend[usize::from(note.channel)] * self.bend_range
-                + note.tuning;
-            440.0 * 2.0_f32.powf((pitch - 69.0) / 12.0)
+            self.note_frequency(self.notes[self.len - 1])
         };
     }
 
@@ -155,8 +244,10 @@ impl MidiTracker {
                         voice_id,
                         tuning: 0.0,
                         pressed: true,
+                        slot: None,
                     };
                     self.len += 1;
+                    self.assign_new_note();
                 }
             }
             NoteEvent::NoteOff {
@@ -240,6 +331,39 @@ mod tests {
             key: Key::Number(key),
             velocity: 0.0,
         }
+    }
+
+    #[test]
+    fn poly_notes_keep_their_points_through_releases_bends_and_voice_stealing() {
+        let mut midi = MidiTracker::default();
+        midi.set_point_mask(0b111);
+        nice_assert_no_alloc::assert_no_alloc(|| {
+            midi.handle(on(0, 57));
+            midi.handle(on(1, 69));
+            midi.handle(on(2, 81));
+            assert_eq!(midi.point_frequencies()[..3], [220.0, 440.0, 880.0]);
+            midi.handle(off(1, 69));
+            assert_eq!(midi.point_frequencies()[..3], [220.0, 0.0, 880.0]);
+            midi.handle(on(1, 60));
+            let middle = midi.point_frequencies()[1];
+            midi.handle(on(3, 45));
+            assert_eq!(midi.point_frequencies()[..3], [110.0, middle, 880.0]);
+            midi.handle(NoteEvent::MidiPitchBend {
+                timing: 0,
+                channel: 1,
+                value: 1.0,
+            });
+            let bent = midi.point_frequencies()[1];
+            assert!((bent / middle - 2.0_f32.powf(2.0 / 12.0)).abs() < 1e-6);
+            assert_eq!(midi.point_frequencies()[0], 110.0);
+            assert_eq!(midi.point_frequencies()[2], 880.0);
+            midi.handle(off(3, 45));
+            assert_eq!(midi.point_frequencies()[..3], [220.0, bent, 880.0]);
+            midi.set_point_mask(0b101);
+            assert_eq!(midi.point_frequencies()[..3], [220.0, 0.0, 880.0]);
+            midi.set_point_mask(0b111);
+            assert_eq!(midi.point_frequencies()[..3], [220.0, bent, 880.0]);
+        });
     }
 
     #[test]

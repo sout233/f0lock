@@ -163,6 +163,7 @@ fn buffered_pitch_and_parameters_share_the_source_timestamp() {
                 assert_eq!(queue.analysis_controls(5631, controls).bands[0].gain, -12.0);
             }
             let decision = (i == 37 + 5631).then_some(Decision {
+                midi_frequencies: None,
                 dated: true,
                 age: 5631,
                 prelock_age: None,

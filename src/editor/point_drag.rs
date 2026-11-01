@@ -92,7 +92,7 @@ impl F0Editor {
                         .expect("Drag has a press origin"),
                     ratio: band.ratio.unmodulated_plain_value(),
                     gain: band.gain.unmodulated_plain_value(),
-                    f0,
+                    f0: self.point_pitch(index, f0),
                     has_gain,
                 });
             }

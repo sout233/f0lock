@@ -33,6 +33,8 @@ pub(crate) struct Telemetry {
     values: [AtomicU32; 10],
     spectrum: [AtomicU32; analyzer::BINS],
     bands: [[AtomicU32; band::BAND_VALUES]; band::BAND_COUNT],
+    point_pitches: [AtomicU32; band::BAND_COUNT],
+    midi_active: AtomicU32,
 }
 
 impl Default for Telemetry {
@@ -44,12 +46,19 @@ impl Default for Telemetry {
             values: std::array::from_fn(|_| AtomicU32::new(0)),
             spectrum: std::array::from_fn(|_| AtomicU32::new((-100.0_f32).to_bits())),
             bands: std::array::from_fn(|_| std::array::from_fn(|_| AtomicU32::new(0))),
+            point_pitches: std::array::from_fn(|_| AtomicU32::new(0)),
+            midi_active: AtomicU32::new(0),
         }
     }
 }
 
 impl Telemetry {
     fn publish(&self, e: &Engine) {
+        for (i, value) in self.point_pitches.iter().enumerate() {
+            value.store(e.point_pitch(i).to_bits(), Ordering::Relaxed);
+        }
+        self.midi_active
+            .store(e.midi_active_mask(), Ordering::Relaxed);
         self.latency_samples
             .store(e.latency_samples() as u32, Ordering::Relaxed);
         for (destination, source) in self.bands.iter().zip(&e.bands) {
@@ -92,6 +101,10 @@ impl Telemetry {
         std::array::from_fn(|i| {
             std::array::from_fn(|j| f32::from_bits(self.bands[i][j].load(Ordering::Relaxed)))
         })
+    }
+
+    fn point_pitch(&self, index: usize) -> f32 {
+        f32::from_bits(self.point_pitches[index].load(Ordering::Relaxed))
     }
 }
 
@@ -197,6 +210,8 @@ impl Plugin for F0Lock {
         self.engine
             .configure_pitch_source(self.params.pitch_source.value());
         self.engine
+            .configure_midi_mode(self.params.midi_mode.value());
+        self.engine
             .set_midi_bend_range(self.params.midi_bend_range.value() as f32);
         self.engine
             .configure_detection_range(self.params.detection_range.value());
@@ -222,6 +237,8 @@ impl Plugin for F0Lock {
     ) -> ProcessStatus {
         let _denormal_guard = realtime::DenormalGuard::new();
         let old_latency = self.engine.latency_samples();
+        self.engine
+            .configure_midi_mode(self.params.midi_mode.value());
         self.engine
             .configure_pitch_source(self.params.pitch_source.value());
         self.engine
@@ -255,6 +272,12 @@ impl Plugin for F0Lock {
 
         let mut next_event = context.next_event();
         for (index, mut frame) in buffer.iter_samples().enumerate() {
+            if self.engine.pitch_source == midi::PitchSource::Midi {
+                let points = (0..band::BAND_COUNT).fold(0, |mask, i| {
+                    mask | (u8::from(self.params.band(i).exists.value()) << i)
+                });
+                self.engine.configure_midi_points(points);
+            }
             while let Some(event) = next_event {
                 if event.timing() > index as u32 {
                     break;

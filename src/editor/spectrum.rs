@@ -78,7 +78,9 @@ impl F0Editor {
                 return None;
             }
 
-            let frequency = (layout_f0 * b.ratio.value()).min(plot.max_hz).max(20.0);
+            let frequency = (self.point_pitch(i, layout_f0) * b.ratio.value())
+                .min(plot.max_hz)
+                .max(20.0);
             let db = if b.kind.value().has_gain() {
                 b.gain.value()
             } else {
@@ -87,7 +89,11 @@ impl F0Editor {
 
             let point = Pos2::new(plot.x(frequency), plot.y(db));
 
-            let color = if !b.enabled.value() {
+            let active = self
+                .telemetry
+                .midi_active
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let color = if !b.enabled.value() || (self.midi_poly() && active & (1 << i) == 0) {
                 Color32::from_gray(91)
             } else {
                 POINT_COLORS[i]
@@ -161,7 +167,14 @@ impl F0Editor {
 
         let midi = self.params.pitch_source.value() == crate::midi::PitchSource::Midi;
         if midi {
-            readout = if v[0] > 0.0 {
+            readout = if self.midi_poly() {
+                let active = self
+                    .telemetry
+                    .midi_active
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    .count_ones();
+                format!("MIDI Poly · {active} notes")
+            } else if v[0] > 0.0 {
                 format!("{:.1} Hz · MIDI", v[0])
             } else {
                 "MIDI · No notes".into()

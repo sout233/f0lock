@@ -3,7 +3,7 @@ use crate::{
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
     lookahead::{Decision, Lookahead, LookaheadTime},
-    midi::{MidiTracker, PitchSource},
+    midi::{MidiMode, MidiTracker, PitchSource},
     mode::OperatingMode,
     pitch::{DetectionMode, DetectionRange, Target},
 };
@@ -52,7 +52,11 @@ impl Default for Controls {
 pub struct Engine {
     pub mode: OperatingMode,
     pub pitch_source: PitchSource,
+    pub midi_mode: MidiMode,
     midi: MidiTracker,
+    point_log_frequencies: [f64; BAND_COUNT],
+    point_frequencies: [f32; BAND_COUNT],
+    point_voiced: [bool; BAND_COUNT],
     pub visualize: bool,
     pub detector: Detector,
     pub analyzer: Analyzer,
@@ -94,7 +98,11 @@ impl Engine {
             mode: OperatingMode::Track,
             visualize: false,
             pitch_source: PitchSource::default(),
+            midi_mode: MidiMode::default(),
             midi: MidiTracker::default(),
+            point_log_frequencies: [150.0_f64.ln(); BAND_COUNT],
+            point_frequencies: [150.0; BAND_COUNT],
+            point_voiced: [false; BAND_COUNT],
             detector,
             analyzer: Analyzer::new(sample_rate),
             estimate: Estimate::default(),
@@ -148,6 +156,9 @@ impl Engine {
         self.source_started = false;
         self.detector_voiced = false;
         self.prelocking = false;
+        self.point_log_frequencies.fill(150.0_f64.ln());
+        self.point_frequencies.fill(150.0);
+        self.point_voiced.fill(false);
     }
 
     pub fn configure_lookahead(&mut self, enabled: bool, duration: LookaheadTime) {
@@ -181,6 +192,32 @@ impl Engine {
         self.midi.set_bend_range(semitones);
     }
 
+    pub fn configure_midi_mode(&mut self, mode: MidiMode) {
+        if self.midi_mode != mode {
+            self.midi_mode = mode;
+            self.reset_audio();
+        }
+    }
+
+    pub fn configure_midi_points(&mut self, mask: u8) {
+        self.midi.set_point_mask(mask);
+    }
+
+    pub fn point_pitch(&self, index: usize) -> f32 {
+        if self.pitch_source == PitchSource::Midi && self.midi_mode == MidiMode::Poly {
+            self.point_frequencies[index]
+        } else {
+            self.frequency
+        }
+    }
+
+    pub fn midi_active_mask(&self) -> u32 {
+        self.point_voiced
+            .iter()
+            .enumerate()
+            .fold(0, |mask, (i, voiced)| mask | (u32::from(*voiced) << i))
+    }
+
     pub fn handle_midi(&mut self, event: nice_plug::prelude::NoteEvent<()>) {
         self.midi.handle(event);
     }
@@ -200,6 +237,15 @@ impl Engine {
         sidechain: Option<[f32; 2]>,
         controls: Controls,
     ) -> [f32; 2] {
+        if self.pitch_source == PitchSource::Midi {
+            self.configure_midi_points(
+                controls
+                    .bands
+                    .iter()
+                    .enumerate()
+                    .fold(0, |mask, (i, b)| mask | (u8::from(b.exists) << i)),
+            );
+        }
         let changed_source = self.mode != controls.mode
             || (self.pitch_source == PitchSource::Audio
                 && self.detector.mode != controls.detection);
@@ -224,6 +270,8 @@ impl Engine {
         let decision = if self.pitch_source == PitchSource::Midi {
             let frequency = self.midi.frequency();
             Some(Decision {
+                midi_frequencies: (self.midi_mode == MidiMode::Poly)
+                    .then(|| self.midi.point_frequencies()),
                 dated: true,
                 age: 0,
                 prelock_age: None,
@@ -244,6 +292,7 @@ impl Engine {
             Some(
                 if let Some((start, center)) = self.detector.decision_ages() {
                     Decision {
+                        midi_frequencies: None,
                         dated: true,
                         age: center,
                         prelock_age: acquiring.then_some(start),
@@ -251,6 +300,7 @@ impl Engine {
                     }
                 } else {
                     Decision {
+                        midi_frequencies: None,
                         dated: false,
                         age: 0,
                         prelock_age: None,
@@ -322,6 +372,21 @@ impl Engine {
         }
         self.frequency = self.log_frequency.exp() as f32;
 
+        if let Some(frequencies) = frame.midi_frequencies {
+            for (i, frequency) in frequencies.into_iter().enumerate() {
+                self.point_voiced[i] = frequency > 0.0;
+                if self.point_voiced[i] {
+                    let target = f64::from(frequency).ln();
+                    if self.bands[i].wet == 0.0 {
+                        self.point_log_frequencies[i] = target;
+                    }
+                    self.point_log_frequencies[i] +=
+                        self.tracking_alpha * (target - self.point_log_frequencies[i]);
+                    self.point_frequencies[i] = self.point_log_frequencies[i].exp() as f32;
+                }
+            }
+        }
+
         for (i, time) in [controls.attack_ms, controls.release_ms]
             .into_iter()
             .enumerate()
@@ -339,7 +404,8 @@ impl Engine {
 
         let mut wet = input;
 
-        for (band, control) in self.bands.iter_mut().zip(controls.bands) {
+        let poly = self.pitch_source == PitchSource::Midi && self.midi_mode == MidiMode::Poly;
+        for (i, (band, control)) in self.bands.iter_mut().zip(controls.bands).enumerate() {
             let mut envelope_steps = self.envelope_steps;
             if controls.infinite_release && control.exists && control.enabled {
                 // Hold the existing amount on pitch loss; explicit band removal
@@ -350,8 +416,16 @@ impl Engine {
                 wet,
                 frame.source,
                 control,
-                self.frequency,
-                self.source_started,
+                if poly {
+                    self.point_frequencies[i]
+                } else {
+                    self.frequency
+                },
+                if poly {
+                    self.point_voiced[i]
+                } else {
+                    self.source_started
+                },
                 self.sample_rate,
                 self.control_alpha,
                 envelope_steps,

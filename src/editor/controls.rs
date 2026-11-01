@@ -386,7 +386,11 @@ impl F0Editor {
             p.text(
                 at(300.0, 373.0),
                 egui::Align2::CENTER_CENTER,
-                format!("{:.1} Hz", (v[2] * band.ratio.value()).min(v[7] * 0.49)),
+                format!(
+                    "{:.1} Hz",
+                    (self.point_pitch(self.selected.unwrap(), v[2]) * band.ratio.value())
+                        .min(v[7] * 0.49)
+                ),
                 FontId::monospace(11.0),
                 Color32::from_gray(91),
             );

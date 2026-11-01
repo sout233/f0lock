@@ -113,6 +113,7 @@ pub(super) unsafe fn verify(plugin: *const clap_plugin, params: *const clap_plug
 
         for (name, text) in [
             ("Pitch Source", "MIDI"),
+            ("MIDI Mode", "Poly: one note per point"),
             ("MIDI Bend Range", "12 st"),
             ("Lookahead", "Off"),
             ("Operating Mode", "Track EQ"),
@@ -140,6 +141,7 @@ pub(super) unsafe fn verify(plugin: *const clap_plugin, params: *const clap_plug
         };
         assert!((*state).save.unwrap()(plugin, &writer));
         set_param(plugin, params, "Pitch Source", "Audio");
+        set_param(plugin, params, "MIDI Mode", "Mono");
         set_param(plugin, params, "MIDI Bend Range", "2 st");
         let mut saved = Cursor::new(saved);
         let reader = clap_istream {
@@ -153,6 +155,12 @@ pub(super) unsafe fn verify(plugin: *const clap_plugin, params: *const clap_plug
             assert!((*params).get_value.unwrap()(plugin, id, &mut value));
             assert_eq!(value, expected);
         }
+
+        let (id, expected) = text_event(plugin, params, "MIDI Mode", "Poly: one note per point");
+        let mut value = 0.0;
+        assert!((*params).get_value.unwrap()(plugin, id, &mut value));
+        assert_eq!(value, expected);
+        set_param(plugin, params, "MIDI Mode", "Mono");
 
         assert!((*plugin).activate.unwrap()(plugin, 48000.0, 1, 512));
         let latency = (*plugin).get_extension.unwrap()(plugin, CLAP_EXT_LATENCY.as_ptr())
@@ -204,8 +212,47 @@ pub(super) unsafe fn verify(plugin: *const clap_plugin, params: *const clap_plug
         lookahead_tests::process_event(plugin, [0.0; 2], Some(&note.header));
         let gain = render(plugin, None);
         assert!(gain.abs() < 1e-6, "Note off did not release EQ: {gain} dB");
+
+        for (name, text) in [
+            ("MIDI Mode", "Poly: one note per point"),
+            ("Band 2 exists", "On"),
+            ("Band 2 ratio", "1"),
+            ("Band 2 gain", "-9 dB"),
+            ("Band 2 dynamic enabled", "Off"),
+            ("Band 2 type", "Peak"),
+            ("Q", "6"),
+            ("Band 2 Q", "6"),
+        ] {
+            set_param(plugin, params, name, text);
+        }
+        lookahead_tests::process_event(plugin, [0.0; 2], None);
+        (*plugin).reset.unwrap()(plugin);
+        note.header.type_ = CLAP_EVENT_NOTE_ON;
+        note.note_id = 57;
+        note.key = 57;
+        lookahead_tests::process_event(plugin, [0.0; 2], Some(&note.header));
+        note.note_id = 81;
+        note.key = 81;
+        lookahead_tests::process_event(plugin, [0.0; 2], Some(&note.header));
+        let low = render_tone(plugin, None, None, 220.0);
+        let high = render_tone(plugin, None, None, 880.0);
+        assert!((low + 6.0).abs() < 0.1, "Poly low note: {low} dB");
+        assert!((high + 9.0).abs() < 0.1, "Poly high note: {high} dB");
+        note.header.type_ = CLAP_EVENT_NOTE_OFF;
+        note.note_id = 57;
+        note.key = 57;
+        lookahead_tests::process_event(plugin, [0.0; 2], Some(&note.header));
+        let low = render_tone(plugin, None, None, 220.0);
+        let high = render_tone(plugin, None, None, 880.0);
+        assert!(low.abs() < 0.1, "Released poly note: {low} dB");
+        assert!(
+            (high + 9.0).abs() < 0.1,
+            "Remaining poly note moved: {high} dB"
+        );
         (*plugin).stop_processing.unwrap()(plugin);
         (*plugin).deactivate.unwrap()(plugin);
-        println!("MIDI ports / state restore / sample timing / EQ / pitch bend / note off passed");
+        println!(
+            "MIDI ports / state restore / sample timing / EQ / pitch bend / polyphony / independent release passed"
+        );
     }
 }

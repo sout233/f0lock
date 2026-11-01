@@ -11,9 +11,17 @@ impl F0Editor {
                     plot.right_top() + Vec2::new(-139.0, 6.0),
                     Vec2::new(133.0, 25.0),
                 ),
-                egui::Label::new("MIDI Tracking"),
+                egui::Label::new(if self.midi_poly() {
+                    "MIDI Poly Tracking"
+                } else {
+                    "MIDI Tracking"
+                }),
             )
-            .on_hover_text("Route MIDI notes to this plugin. Latest held note sets the EQ pitch.");
+            .on_hover_text(if self.midi_poly() {
+                "Each point follows its assigned MIDI note; Point Ratio still applies."
+            } else {
+                "Route MIDI notes to this plugin. Latest held note sets the EQ pitch."
+            });
             return;
         }
         let Some(gui) = &self.gui else { return };
