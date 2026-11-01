@@ -1,9 +1,10 @@
-use super::{BINS, MAX_HZ, MIN_HZ, PERIODIC_MAX_HZ, Target, TargetMode};
+use super::{MAX_HZ, MIN_HZ, PERIODIC_MAX_HZ, Target, TargetMode};
 use pitch_estimate::McLeodDetector;
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex32};
 use std::sync::Arc;
 
-pub(super) struct Observations {
+pub(super) struct Observations<const BINS: usize = { crate::pitch::BINS }> {
+    minimum: f32,
     pub probability: [f32; BINS],
     pub frequency: [f32; BINS],
     pub clarity: [f32; BINS],
@@ -11,7 +12,14 @@ pub(super) struct Observations {
 
 impl Default for Observations {
     fn default() -> Self {
+        Self::new(MIN_HZ)
+    }
+}
+
+impl<const BINS: usize> Observations<BINS> {
+    pub fn new(minimum: f32) -> Self {
         Self {
+            minimum,
             probability: [0.0; BINS],
             frequency: [0.0; BINS],
             clarity: [0.0; BINS],
@@ -19,7 +27,7 @@ impl Default for Observations {
     }
 }
 
-impl Observations {
+impl<const BINS: usize> Observations<BINS> {
     pub fn clear(&mut self) {
         self.probability.fill(0.0);
         self.frequency.fill(0.0);
@@ -27,11 +35,11 @@ impl Observations {
     }
 
     pub fn add(&mut self, frequency: f32, clarity: f32, probability: f32) {
-        if !(MIN_HZ..=MAX_HZ).contains(&frequency) {
+        if !(self.minimum..=MAX_HZ).contains(&frequency) {
             return;
         }
 
-        let bin = (120.0 * (frequency / MIN_HZ).log2()).round() as usize;
+        let bin = (120.0 * (frequency / self.minimum).log2()).round() as usize;
         let total = self.probability[bin] + probability;
 
         if total > 0.0 {
@@ -104,12 +112,12 @@ impl SpectralEvidence {
     }
 }
 
-pub(super) fn mpm_observations(
+pub(super) fn mpm_observations<const BINS: usize>(
     mpm: &mut McLeodDetector<f32>,
     frame: &[f32],
     rate: f32,
     evidence: &SpectralEvidence,
-    out: &mut Observations,
+    out: &mut Observations<BINS>,
     target: Target,
 ) {
     let mut voiced = 0.0_f32;
@@ -117,7 +125,7 @@ pub(super) fn mpm_observations(
     mpm.candidates(frame, rate.round() as u32, |pitch| {
         let hz = pitch.frequency * rate / rate.round();
 
-        if (MIN_HZ..=PERIODIC_MAX_HZ).contains(&hz) && target.allows(hz) {
+        if (out.minimum..=PERIODIC_MAX_HZ).contains(&hz) && target.allows(hz) {
             voiced = voiced.max(pitch.clarity);
             let weight = (24.0 * (pitch.clarity - 1.0)).exp() * evidence.support(hz, rate);
             out.add(hz, pitch.clarity, weight);
@@ -133,11 +141,11 @@ pub(super) fn mpm_observations(
     }
 }
 
-pub(super) fn pyin_observations(
+pub(super) fn pyin_observations<const BINS: usize>(
     curve: &[f32],
     difference: &[f32],
     rate: f32,
-    out: &mut Observations,
+    out: &mut Observations<BINS>,
     target: Target,
 ) {
     // Beta(2, 18): CDF(x) = 1 - (1-x)^18 * (1+18x).
@@ -149,7 +157,7 @@ pub(super) fn pyin_observations(
         if curve[i] < curve[i - 1]
             && curve[i] <= curve[i + 1]
             && (target.mode == TargetMode::Auto
-                || ((MIN_HZ..=PERIODIC_MAX_HZ).contains(&(rate / refine(difference, i).0))
+                || ((out.minimum..=PERIODIC_MAX_HZ).contains(&(rate / refine(difference, i).0))
                     && target.allows(rate / refine(difference, i).0)))
             && minimum.is_none_or(|previous| curve[i] < curve[previous])
         {
@@ -169,7 +177,8 @@ pub(super) fn pyin_observations(
                 && curve[i] < curve[i - 1]
                 && curve[i] <= curve[i + 1]
                 && (target.mode == TargetMode::Auto
-                    || ((MIN_HZ..=PERIODIC_MAX_HZ).contains(&(rate / refine(difference, i).0))
+                    || ((out.minimum..=PERIODIC_MAX_HZ)
+                        .contains(&(rate / refine(difference, i).0))
                         && target.allows(rate / refine(difference, i).0)))
             {
                 selected = i;
@@ -188,7 +197,7 @@ pub(super) fn pyin_observations(
         let (_, depth) = refine(curve, selected);
         let hz = rate / lag;
 
-        if (MIN_HZ..=PERIODIC_MAX_HZ).contains(&hz) {
+        if (out.minimum..=PERIODIC_MAX_HZ).contains(&hz) {
             out.add(hz, (1.0 - depth).clamp(0.0, 1.0), mass);
         }
     }

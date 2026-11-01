@@ -3,8 +3,9 @@ use crate::{
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
     lookahead::{Decision, Lookahead, LookaheadTime},
+    midi::{MidiTracker, PitchSource},
     mode::OperatingMode,
-    pitch::{DetectionMode, Target},
+    pitch::{DetectionMode, DetectionRange, Target},
 };
 
 #[derive(Clone, Copy)]
@@ -50,6 +51,8 @@ impl Default for Controls {
 
 pub struct Engine {
     pub mode: OperatingMode,
+    pub pitch_source: PitchSource,
+    midi: MidiTracker,
     pub visualize: bool,
     pub detector: Detector,
     pub analyzer: Analyzer,
@@ -81,11 +84,17 @@ pub struct Engine {
 impl Engine {
     pub fn new(sample_rate: f32) -> Self {
         let detector = Detector::new(sample_rate);
-        let lookahead = Lookahead::new(sample_rate, detector.maximum_decision_age_samples());
+        let lookahead = Lookahead::with_capacity(
+            sample_rate,
+            detector.maximum_decision_age_samples(),
+            detector.extended_decision_age_samples(),
+        );
 
         Self {
             mode: OperatingMode::Track,
             visualize: false,
+            pitch_source: PitchSource::default(),
+            midi: MidiTracker::default(),
             detector,
             analyzer: Analyzer::new(sample_rate),
             estimate: Estimate::default(),
@@ -115,6 +124,11 @@ impl Engine {
     }
 
     pub fn reset(&mut self) {
+        self.midi.reset();
+        self.reset_audio();
+    }
+
+    fn reset_audio(&mut self) {
         self.detector.reset();
         self.analyzer.reset();
         self.estimate = Estimate::default();
@@ -138,8 +152,37 @@ impl Engine {
 
     pub fn configure_lookahead(&mut self, enabled: bool, duration: LookaheadTime) {
         if self.lookahead.configure(enabled, duration) {
-            self.reset();
+            self.reset_audio();
         }
+    }
+
+    pub fn configure_detection_range(&mut self, range: DetectionRange) {
+        if self.detector.configure_range(range) {
+            if self.pitch_source == PitchSource::Audio {
+                self.lookahead
+                    .set_minimum(self.detector.maximum_decision_age_samples());
+                self.reset_audio();
+            }
+        }
+    }
+
+    pub fn configure_pitch_source(&mut self, source: PitchSource) {
+        if self.pitch_source != source {
+            self.pitch_source = source;
+            self.lookahead.set_minimum(match source {
+                PitchSource::Audio => self.detector.maximum_decision_age_samples(),
+                PitchSource::Midi => 0,
+            });
+            self.reset_audio();
+        }
+    }
+
+    pub fn set_midi_bend_range(&mut self, semitones: f32) {
+        self.midi.set_bend_range(semitones);
+    }
+
+    pub fn handle_midi(&mut self, event: nice_plug::prelude::NoteEvent<()>) {
+        self.midi.handle(event);
     }
 
     pub fn latency_samples(&self) -> usize {
@@ -157,7 +200,9 @@ impl Engine {
         sidechain: Option<[f32; 2]>,
         controls: Controls,
     ) -> [f32; 2] {
-        let changed_source = self.mode != controls.mode || self.detector.mode != controls.detection;
+        let changed_source = self.mode != controls.mode
+            || (self.pitch_source == PitchSource::Audio
+                && self.detector.mode != controls.detection);
 
         if changed_source {
             self.detector_voiced = false;
@@ -176,7 +221,19 @@ impl Engine {
 
         self.detector.mode = controls.detection;
 
-        let decision = if self.detector.push(detection_input) {
+        let decision = if self.pitch_source == PitchSource::Midi {
+            let frequency = self.midi.frequency();
+            Some(Decision {
+                dated: true,
+                age: 0,
+                prelock_age: None,
+                estimate: Estimate {
+                    frequency,
+                    clarity: f32::from(frequency > 0.0),
+                    rms: 0.0,
+                },
+            })
+        } else if self.detector.push(detection_input) {
             let analysis = self
                 .lookahead
                 .analysis_controls(self.detector.analysis_center_age_samples(), controls);
@@ -205,10 +262,13 @@ impl Engine {
             None
         };
 
-        let Some(frame) =
-            self.lookahead
-                .push(input, detection_input, controls, decision, changed_source)
-        else {
+        let Some(frame) = self.lookahead.push(
+            input,
+            detection_input,
+            controls,
+            decision,
+            changed_source && self.pitch_source == PitchSource::Audio,
+        ) else {
             return [0.0; 2];
         };
         let input = frame.audio;
@@ -244,8 +304,10 @@ impl Engine {
 
         // Lookahead can know a pitch before the buffered source starts. Wait
         // for its Gate crossing so Attack is not spent on preceding silence.
-        self.source_started =
-            self.estimate.frequency > 0.0 && (self.source_started || frame.source_active);
+        self.source_started = self.estimate.frequency > 0.0
+            && (self.source_started
+                || frame.source_active
+                || self.pitch_source == PitchSource::Midi);
 
         if controls.tracking_ms != self.tracking_ms {
             self.tracking_ms = controls.tracking_ms;

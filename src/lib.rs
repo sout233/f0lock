@@ -6,6 +6,7 @@ mod editor;
 mod engine;
 mod filter;
 mod lookahead;
+mod midi;
 mod mode;
 mod params;
 mod pitch;
@@ -66,7 +67,7 @@ impl Telemetry {
             e.input_peak,
             e.output_peak,
             e.sample_rate,
-            detector::WINDOW as f32 / e.detector.rate * 1000.0,
+            e.detector.window_samples() as f32 / e.detector.rate * 1000.0,
             e.estimate.rms,
         ];
 
@@ -154,6 +155,7 @@ impl Plugin for F0Lock {
     ];
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
+    const MIDI_INPUT: MidiConfig = MidiConfig::MidiCCs;
 
     type Editor = EguiEditor<editor::F0Editor>;
     type SysExMessage = ();
@@ -192,6 +194,12 @@ impl Plugin for F0Lock {
         }
 
         self.engine = Engine::new(config.sample_rate);
+        self.engine
+            .configure_pitch_source(self.params.pitch_source.value());
+        self.engine
+            .set_midi_bend_range(self.params.midi_bend_range.value() as f32);
+        self.engine
+            .configure_detection_range(self.params.detection_range.value());
         self.engine.configure_lookahead(
             self.params.lookahead.value(),
             self.params.lookahead_time.value(),
@@ -214,6 +222,12 @@ impl Plugin for F0Lock {
     ) -> ProcessStatus {
         let _denormal_guard = realtime::DenormalGuard::new();
         let old_latency = self.engine.latency_samples();
+        self.engine
+            .configure_pitch_source(self.params.pitch_source.value());
+        self.engine
+            .set_midi_bend_range(self.params.midi_bend_range.value() as f32);
+        self.engine
+            .configure_detection_range(self.params.detection_range.value());
         self.engine.configure_lookahead(
             self.params.lookahead.value(),
             self.params.lookahead_time.value(),
@@ -239,7 +253,15 @@ impl Plugin for F0Lock {
         }
         let sidechain = sidechain.map(Buffer::as_slice_immutable);
 
+        let mut next_event = context.next_event();
         for (index, mut frame) in buffer.iter_samples().enumerate() {
+            while let Some(event) = next_event {
+                if event.timing() > index as u32 {
+                    break;
+                }
+                self.engine.handle_midi(event);
+                next_event = context.next_event();
+            }
             let mode = self.params.mode.value();
             let params = self.params.for_mode(mode);
             let controls = Controls {
@@ -297,6 +319,12 @@ impl Plugin for F0Lock {
             for (ch, sample) in frame.into_iter().enumerate() {
                 *sample = output[ch];
             }
+        }
+
+        // Events at the buffer boundary take effect on the next audio sample.
+        while let Some(event) = next_event {
+            self.engine.handle_midi(event);
+            next_event = context.next_event();
         }
 
         if self.editor_state.is_open() {

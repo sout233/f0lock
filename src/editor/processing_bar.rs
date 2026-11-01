@@ -1,5 +1,5 @@
 use super::*;
-use crate::{lookahead::LookaheadTime, mode::OperatingMode};
+use crate::{lookahead::LookaheadTime, midi::PitchSource, mode::OperatingMode};
 
 impl F0Editor {
     pub(super) fn processing_bar(&self, ui: &mut egui::Ui, rect: Rect, values: &[f32; 10]) {
@@ -79,6 +79,27 @@ impl F0Editor {
                     if !enabled {
                         set_value(&setter, &self.params.lookahead, true);
                     }
+                    egui::Popup::close_all(ui.ctx());
+                }
+            }
+        });
+
+        let source = self.params.pitch_source.value();
+        let button = strip_button(
+            ui,
+            button_rect(360.0),
+            &format!("Pitch: {}", source.label()),
+            accent,
+            false,
+            true,
+        );
+        egui::Popup::menu(&button).width(160.0).show(|ui| {
+            for choice in PitchSource::ALL {
+                if ui
+                    .selectable_label(source == choice, choice.label())
+                    .clicked()
+                {
+                    set_value(&setter, &self.params.pitch_source, choice);
                     egui::Popup::close_all(ui.ctx());
                 }
             }

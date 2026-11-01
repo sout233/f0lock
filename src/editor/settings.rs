@@ -1,5 +1,6 @@
 use super::*;
-use crate::pitch::DetectionMode;
+use crate::midi::PitchSource;
+use crate::pitch::{DetectionMode, DetectionRange};
 use std::sync::atomic::Ordering;
 
 const UI_SCALES: [u32; 8] = [75, 90, 100, 110, 125, 150, 175, 200];
@@ -137,10 +138,12 @@ impl F0Editor {
                         ui.end_row();
 
                         ui.label("Detection Input");
-                        ui.label(match params.mode.value() {
+                        ui.label(if params.pitch_source.value() == PitchSource::Midi {
+                            "MIDI notes"
+                        } else { match params.mode.value() {
                             crate::mode::OperatingMode::Track => "Main input",
                             crate::mode::OperatingMode::Sidechain => "External sidechain",
-                        });
+                        }});
                         ui.end_row();
 
                         ui.label("Buffer");
@@ -176,6 +179,57 @@ impl F0Editor {
 
                 let Some(gui) = gui else { return };
                 let setter = gui.param_setter();
+
+                ui.horizontal(|ui| {
+                    ui.label("Pitch Source");
+                    egui::ComboBox::from_id_salt("pitch-source")
+                        .selected_text(params.pitch_source.value().label())
+                        .show_ui(ui, |ui| {
+                            for source in PitchSource::ALL {
+                                if ui.selectable_label(params.pitch_source.value() == source, source.label()).clicked() {
+                                    set_value(&setter, &params.pitch_source, source);
+                                }
+                            }
+                        });
+                });
+                let midi = params.pitch_source.value() == PitchSource::Midi;
+                if midi {
+                    ui.horizontal(|ui| {
+                        ui.label("Pitch Bend ±");
+                        let mut value = params.midi_bend_range.value();
+                        if ui.add(egui::DragValue::new(&mut value).range(1..=24).suffix(" st")).changed() {
+                            set_value(&setter, &params.midi_bend_range, value);
+                        }
+                    });
+                    ui.label(egui::RichText::new(
+                        "Latest held note wins. Audio detection, Target, Gate and Clarity do not affect MIDI pitch."
+                    ).size(11.0).color(MUTED));
+                }
+                ui.add_enabled_ui(!midi, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Detection Range");
+                    egui::ComboBox::from_id_salt("detection-range")
+                        .selected_text(params.detection_range.value().label())
+                        .show_ui(ui, |ui| {
+                            for range in DetectionRange::ALL {
+                                if ui
+                                    .selectable_label(
+                                        params.detection_range.value() == range,
+                                        range.label(),
+                                    )
+                                    .clicked()
+                                {
+                                    set_value(&setter, &params.detection_range, range);
+                                }
+                            }
+                        });
+                });
+                if params.detection_range.value() == DetectionRange::Low {
+                    ui.label(egui::RichText::new(
+                        "Low range responds more slowly and increases minimum lookahead latency."
+                    ).size(11.0).color(MUTED));
+                }
+                });
                 let mut bypass = params.bypass.value();
 
                 if ui.checkbox(&mut bypass, "Bypass").changed() {

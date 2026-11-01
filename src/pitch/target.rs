@@ -1,4 +1,4 @@
-use super::{MAX_HZ, MIN_HZ, candidates::Observations};
+use super::{EXTENDED_MIN_HZ, MAX_HZ, candidates::Observations};
 use nice_plug::prelude::*;
 
 #[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -46,14 +46,23 @@ impl Default for Target {
 }
 
 impl Target {
+    pub fn for_minimum(self, minimum: f32) -> Self {
+        Self {
+            minimum: self.minimum.max(minimum),
+            maximum: self.maximum.max(minimum),
+            reference: self.reference.max(minimum),
+            ..self
+        }
+    }
+
     pub fn bounds(self) -> (f32, f32) {
         match self.mode {
-            TargetMode::Auto => (MIN_HZ, MAX_HZ),
+            TargetMode::Auto => (EXTENDED_MIN_HZ, MAX_HZ),
             TargetMode::Range => (self.minimum, self.maximum),
             TargetMode::Reference => {
                 let ratio = 2.0_f32.powf(self.tolerance / 12.0);
                 (
-                    (self.reference / ratio).max(MIN_HZ),
+                    (self.reference / ratio).max(EXTENDED_MIN_HZ),
                     (self.reference * ratio).min(MAX_HZ),
                 )
             }
@@ -65,7 +74,7 @@ impl Target {
         hz >= minimum && hz <= maximum
     }
 
-    pub(super) fn apply_preference(self, observations: &mut Observations) {
+    pub(super) fn apply_preference<const BINS: usize>(self, observations: &mut Observations<BINS>) {
         if self.mode != TargetMode::Reference {
             return;
         }

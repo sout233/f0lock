@@ -1,14 +1,27 @@
 use super::*;
-use crate::pitch::{MAX_HZ, MIN_HZ, TargetMode};
+use crate::pitch::{MAX_HZ, TargetMode};
 
 const TARGET_COLOR: Color32 = Color32::from_rgb(95, 158, 184);
 
 impl F0Editor {
     pub(super) fn target_controls(&self, ui: &mut egui::Ui, plot: Rect, max_hz: f32) {
+        if self.params.pitch_source.value() == crate::midi::PitchSource::Midi {
+            ui.put(
+                Rect::from_min_size(
+                    plot.right_top() + Vec2::new(-139.0, 6.0),
+                    Vec2::new(133.0, 25.0),
+                ),
+                egui::Label::new("MIDI Tracking"),
+            )
+            .on_hover_text("Route MIDI notes to this plugin. Latest held note sets the EQ pitch.");
+            return;
+        }
         let Some(gui) = &self.gui else { return };
         let setter = gui.param_setter();
         let target = self.params.target();
+        let min_hz = self.params.detection_range.value().minimum();
         let (minimum, maximum) = target.bounds();
+        let minimum = minimum.max(min_hz);
         let x = |hz: f32| plot.left() + (hz / 20.0).ln() / (max_hz / 20.0).ln() * plot.width();
         let hz = |x: f32| 20.0 * (max_hz / 20.0).powf((x - plot.left()) / plot.width());
         let p = ui.painter_at(plot);
@@ -58,7 +71,7 @@ impl F0Editor {
                     let pointer = response
                         .interact_pointer_pos()
                         .expect("Target drag without pointer");
-                    let frequency = hz(pointer.x).clamp(MIN_HZ, MAX_HZ);
+                    let frequency = hz(pointer.x).clamp(min_hz, MAX_HZ);
                     let value = if target.mode == TargetMode::Reference {
                         (12.0 * (frequency / target.reference).log2())
                             .abs()
@@ -121,7 +134,7 @@ impl F0Editor {
                         .expect("Reference drag without pointer");
                     setter.set_parameter(
                         &self.params.active().target_reference,
-                        hz(pointer.x).clamp(MIN_HZ, MAX_HZ),
+                        hz(pointer.x).clamp(min_hz, MAX_HZ),
                     );
                 }
 
@@ -188,15 +201,18 @@ impl F0Editor {
 
                                 for (param, label) in fields {
                                     ui.label(label);
-                                    let mut bounds =
-                                        param.preview_plain(0.0)..=param.preview_plain(1.0);
+                                    let mut bounds = if param.unit() == " Hz" {
+                                        min_hz..=MAX_HZ
+                                    } else {
+                                        param.preview_plain(0.0)..=param.preview_plain(1.0)
+                                    };
 
                                     if mode == TargetMode::Range {
                                         let bank = self.params.active();
                                         bounds = if label == "Minimum" {
-                                            MIN_HZ..=bank.target_max.value()
+                                            min_hz..=bank.target_max.value().max(min_hz)
                                         } else {
-                                            bank.target_min.value()..=MAX_HZ
+                                            bank.target_min.value().max(min_hz)..=MAX_HZ
                                         };
                                     }
 

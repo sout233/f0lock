@@ -2,6 +2,7 @@ mod cuts;
 mod dynamics;
 mod envelope;
 mod lookahead;
+mod midi;
 mod multiband;
 mod plugin;
 mod sidechain;

@@ -3,8 +3,9 @@ use crate::{
     dynamics::DynamicParams,
     filter::{CutSlope, FilterKind},
     lookahead::LookaheadTime,
+    midi::PitchSource,
     mode::OperatingMode,
-    pitch::{DetectionMode, MAX_HZ, MIN_HZ, Target, TargetMode},
+    pitch::{DetectionMode, DetectionRange, EXTENDED_MIN_HZ, MAX_HZ, Target, TargetMode},
 };
 use nice_plug::prelude::*;
 use std::sync::atomic::AtomicU32;
@@ -25,6 +26,15 @@ pub struct F0Params {
     #[id = "lookahead_time"]
     pub lookahead_time: EnumParam<LookaheadTime>,
 
+    #[id = "detection_range"]
+    pub detection_range: EnumParam<DetectionRange>,
+
+    #[id = "pitch_source"]
+    pub pitch_source: EnumParam<PitchSource>,
+
+    #[id = "midi_bend_range"]
+    pub midi_bend_range: IntParam,
+
     #[persist = "ui_scale_percent"]
     pub ui_scale_percent: AtomicU32,
 
@@ -43,6 +53,16 @@ impl Default for F0Params {
             lookahead: BoolParam::new("Lookahead", false).non_automatable(),
             lookahead_time: EnumParam::new("Lookahead Time", LookaheadTime::default())
                 .non_automatable(),
+            detection_range: EnumParam::new("Detection Range", DetectionRange::default())
+                .non_automatable(),
+            pitch_source: EnumParam::new("Pitch Source", PitchSource::default()).non_automatable(),
+            midi_bend_range: IntParam::new(
+                "MIDI Bend Range",
+                2,
+                IntRange::Linear { min: 1, max: 24 },
+            )
+            .with_unit(" st")
+            .non_automatable(),
             ui_scale_percent: AtomicU32::new(100),
             track: ProcessingParams::new(""),
             sidechain: ProcessingParams::new("Sidechain "),
@@ -67,7 +87,9 @@ impl F0Params {
     }
 
     pub fn target(&self) -> Target {
-        self.active().target()
+        self.active()
+            .target()
+            .for_minimum(self.detection_range.value().minimum())
     }
 }
 
@@ -313,7 +335,7 @@ fn target_frequency_param(name: &str, default: f32) -> FloatParam {
         name,
         default,
         FloatRange::Skewed {
-            min: MIN_HZ,
+            min: EXTENDED_MIN_HZ,
             max: MAX_HZ,
             factor: FloatRange::skew_factor(-1.0),
         },

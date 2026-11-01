@@ -21,6 +21,9 @@ mod gui_tests;
 #[path = "support/clap_lookahead.rs"]
 mod lookahead_tests;
 
+#[path = "support/clap_midi.rs"]
+mod midi_tests;
+
 fn bundle_path(relative: &str) -> std::path::PathBuf {
     let directory = std::env::var_os("F0LOCK_TEST_BUNDLE_DIR")
         .map(std::path::PathBuf::from)
@@ -102,6 +105,7 @@ unsafe fn saved_band_state_round_trip(
         for (name, text) in [
             ("Lookahead", "On"),
             ("Lookahead Time", "200 ms"),
+            ("Detection Range", "Low: 25–2000 Hz"),
             ("Pitch Detection", "pYIN"),
             ("Operating Mode", "Sidechain EQ"),
             ("Sidechain Pitch Detection", "F0LOCK Ψ"),
@@ -438,7 +442,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         assert_eq!(sidechain_info.channel_count, 2);
         assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 224);
+        assert_eq!(count, 227);
         let mut gain_id = None;
         let mut bypass_id = None;
 
@@ -514,6 +518,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         (*plugin).deactivate.unwrap()(plugin);
         saved_band_state_round_trip(plugin, params);
         lookahead_tests::verify(plugin, params);
+        midi_tests::verify(plugin, params);
         (*plugin).destroy.unwrap()(plugin);
         entry.deinit.unwrap()();
     }

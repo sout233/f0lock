@@ -197,6 +197,7 @@ fn target_handles_and_both_parameter_banks_support_two_khz() {
         let bank = f.editor.params.for_mode(mode);
 
         for param in [&bank.target_min, &bank.target_max, &bank.target_reference] {
+            assert_eq!(param.preview_plain(0.0), 25.0);
             assert_eq!(param.preview_plain(1.0), 2000.0);
         }
     }

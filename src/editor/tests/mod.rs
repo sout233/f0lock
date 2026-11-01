@@ -16,6 +16,7 @@ mod native;
 mod points;
 mod preview;
 mod scale;
+mod settings;
 mod spectrum;
 mod target;
 

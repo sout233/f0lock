@@ -1,8 +1,10 @@
 mod candidates;
 mod melody;
+mod range;
 mod target;
 mod tracker;
 
+pub use range::DetectionRange;
 pub use target::{Target, TargetMode};
 
 #[cfg(test)]
@@ -14,12 +16,12 @@ use pitch_estimate::{McLeodDetector, YinDetector};
 use tracker::Tracker;
 
 pub const MIN_HZ: f32 = 50.0;
+pub const EXTENDED_MIN_HZ: f32 = 25.0;
 pub const MAX_HZ: f32 = 2000.0;
 const PERIODIC_MAX_HZ: f32 = 1000.0;
 const PERIODIC_BINS: usize = 520;
 // Ten-cent bins, including the nearest bin for the upper endpoint.
 const BINS: usize = 640;
-const UNVOICED: usize = BINS;
 const STATES: usize = BINS * 2;
 pub const LOOKAHEAD: usize = 3;
 
@@ -61,28 +63,34 @@ impl DetectionMode {
     }
 }
 
-pub struct PitchTracking {
+pub struct PitchTracking<
+    const BINS: usize = { crate::pitch::BINS },
+    const PERIODIC_BINS: usize = { crate::pitch::PERIODIC_BINS },
+    const STATES: usize = { crate::pitch::STATES },
+> {
     pub decision_ready: bool,
     mode: DetectionMode,
     target: Target,
     yin: YinDetector<f32>,
     evidence: SpectralEvidence,
-    melody: melody::MelodyEvidence,
-    observations: Observations,
-    tracker: Tracker,
-    melody_tracker: Tracker<BINS>,
+    melody: melody::MelodyEvidence<BINS>,
+    observations: Observations<BINS>,
+    tracker: Tracker<PERIODIC_BINS, BINS, STATES>,
+    melody_tracker: Tracker<BINS, BINS, STATES>,
 }
 
-impl PitchTracking {
-    pub fn new(rate: f32, window: usize, hop: usize) -> Self {
+impl<const BINS: usize, const PERIODIC_BINS: usize, const STATES: usize>
+    PitchTracking<BINS, PERIODIC_BINS, STATES>
+{
+    pub fn new(rate: f32, window: usize, hop: usize, minimum: f32) -> Self {
         Self {
             decision_ready: false,
             mode: DetectionMode::default(),
             target: Target::default(),
             yin: YinDetector::new(window, window / 2).expect("Invalid pYIN window"),
             evidence: SpectralEvidence::new(window),
-            melody: melody::MelodyEvidence::new(window),
-            observations: Observations::default(),
+            melody: melody::MelodyEvidence::new(window, minimum),
+            observations: Observations::new(minimum),
             tracker: Tracker::new(hop as f32 / rate),
             melody_tracker: Tracker::new(hop as f32 / rate),
         }

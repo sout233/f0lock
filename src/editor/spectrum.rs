@@ -159,7 +159,15 @@ impl F0Editor {
             "— Hz   —%".into()
         };
 
-        let sidechain = self.params.mode.value() == OperatingMode::Sidechain;
+        let midi = self.params.pitch_source.value() == crate::midi::PitchSource::Midi;
+        if midi {
+            readout = if v[0] > 0.0 {
+                format!("{:.1} Hz · MIDI", v[0])
+            } else {
+                "MIDI · No notes".into()
+            };
+        }
+        let sidechain = !midi && self.params.mode.value() == OperatingMode::Sidechain;
         if sidechain {
             readout = format!("SC {readout}");
         }

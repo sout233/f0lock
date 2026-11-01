@@ -1,26 +1,32 @@
-use super::{BINS, LOOKAHEAD, PERIODIC_BINS, STATES, UNVOICED, candidates::Observations};
+use super::{LOOKAHEAD, PERIODIC_BINS, candidates::Observations};
 
 const HISTORY: usize = LOOKAHEAD + 1;
 const VOICE_SWITCH: f32 = 0.01;
 const NEW_NOTE: f32 = 0.01;
 
-struct Frame {
+struct Frame<const BINS: usize, const STATES: usize> {
     threshold: f32,
     previous: [u16; STATES],
     frequency: [f32; BINS],
     clarity: [f32; BINS],
 }
 
-pub(super) struct Tracker<const PITCH_BINS: usize = PERIODIC_BINS> {
+pub(super) struct Tracker<
+    const PITCH_BINS: usize = PERIODIC_BINS,
+    const BINS: usize = { crate::pitch::BINS },
+    const STATES: usize = { crate::pitch::STATES },
+> {
     score: [f32; STATES],
     next: [f32; STATES],
-    history: [Frame; HISTORY],
+    history: [Frame<BINS, STATES>; HISTORY],
     pub(super) frames: usize,
     radius: usize,
     transitions: Vec<f32>,
 }
 
-impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
+impl<const PITCH_BINS: usize, const BINS: usize, const STATES: usize>
+    Tracker<PITCH_BINS, BINS, STATES>
+{
     pub fn new(hop_seconds: f32) -> Self {
         // Scale the paper's 2.5-semitone triangular transition window from
         // its 256/44100-second hop to this detector's hop duration.
@@ -58,13 +64,13 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
 
     pub fn reset(&mut self) {
         self.score.fill(f32::NEG_INFINITY);
-        self.score[UNVOICED..UNVOICED + PITCH_BINS].fill(-(PITCH_BINS as f32).ln());
+        self.score[BINS..BINS + PITCH_BINS].fill(-(PITCH_BINS as f32).ln());
         self.frames = 0;
     }
 
     pub fn process(
         &mut self,
-        observation: &Observations,
+        observation: &Observations<BINS>,
         threshold: f32,
         lag: usize,
     ) -> (f32, f32) {
@@ -73,7 +79,7 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
         let best_voiced = (0..PITCH_BINS)
             .max_by(|&a, &b| self.score[a].total_cmp(&self.score[b]))
             .unwrap();
-        let best_unvoiced = (UNVOICED..UNVOICED + PITCH_BINS)
+        let best_unvoiced = (BINS..BINS + PITCH_BINS)
             .max_by(|&a, &b| self.score[a].total_cmp(&self.score[b]))
             .unwrap();
         let frame = &mut self.history[self.frames % HISTORY];
@@ -94,14 +100,14 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
             for j in i.saturating_sub(self.radius)..=(i + self.radius).min(PITCH_BINS - 1) {
                 let transition = self.transitions[j * (self.radius + 1) + i.abs_diff(j)];
                 let voiced_candidate = self.score[j] + transition;
-                let silent_candidate = self.score[j + UNVOICED] + transition;
+                let silent_candidate = self.score[j + BINS] + transition;
 
                 if voiced_candidate > voiced.1 {
                     voiced = (j, voiced_candidate);
                 }
 
                 if silent_candidate > silent.1 {
-                    silent = (j + UNVOICED, silent_candidate);
+                    silent = (j + BINS, silent_candidate);
                 }
             }
 
@@ -121,8 +127,8 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
             } else {
                 (voiced.0, voiced.1 + switch)
             };
-            self.next[i + UNVOICED] = score + unvoiced.ln();
-            frame.previous[i + UNVOICED] = parent as u16;
+            self.next[i + BINS] = score + unvoiced.ln();
+            frame.previous[i + BINS] = parent as u16;
         }
 
         let mut state = (0..STATES)
@@ -145,7 +151,7 @@ impl<const PITCH_BINS: usize> Tracker<PITCH_BINS> {
             state = self.history[(self.frames - 1 - offset) % HISTORY].previous[state] as usize;
         }
 
-        if state >= UNVOICED {
+        if state >= BINS {
             return (0.0, 0.0);
         }
 

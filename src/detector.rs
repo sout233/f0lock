@@ -1,8 +1,10 @@
 use crate::filter::{Coefficients, Svf};
-use crate::pitch::{DetectionMode, LOOKAHEAD, PitchTracking, Target, TargetMode};
+use crate::pitch::{DetectionMode, DetectionRange, LOOKAHEAD, PitchTracking, Target, TargetMode};
 use pitch_estimate::{McLeodDetector, PitchDetector};
 
 pub const WINDOW: usize = 1024;
+// Half the window covers a 25 Hz period even at decimated rates near 24 kHz.
+pub const EXTENDED_WINDOW: usize = 2048;
 pub const HOP: usize = 128;
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -12,10 +14,16 @@ pub struct Estimate {
     pub rms: f32,
 }
 
-pub struct Detector {
+struct DetectorCore<
+    const WINDOW: usize,
+    const BINS: usize,
+    const PERIODIC_BINS: usize,
+    const STATES: usize,
+> {
+    minimum: f32,
     pub mode: DetectionMode,
     pub target: Target,
-    tracking: PitchTracking,
+    tracking: PitchTracking<BINS, PERIODIC_BINS, STATES>,
     pub rate: f32,
     decimation: usize,
     phase: usize,
@@ -35,20 +43,23 @@ pub struct Detector {
     frame: [f32; WINDOW],
 }
 
-impl Detector {
-    pub fn new(sample_rate: f32) -> Self {
+impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const STATES: usize>
+    DetectorCore<WINDOW, BINS, PERIODIC_BINS, STATES>
+{
+    fn new(sample_rate: f32, minimum: f32) -> Self {
         let decimation = (sample_rate / 12000.0).floor().max(1.0) as usize;
         let rate = sample_rate / decimation as f32;
 
-        let mpm = McLeodDetector::new(WINDOW, (rate / 50.0 * 1.6).ceil() as usize)
+        let mpm = McLeodDetector::new(WINDOW, (rate / minimum * 1.6).ceil() as usize)
             .expect("Invalid MPM window configuration")
             .with_k(0.93)
             .with_clarity_threshold(0.0);
 
         Self {
+            minimum,
             mode: DetectionMode::default(),
             target: Target::default(),
-            tracking: PitchTracking::new(rate, WINDOW, HOP),
+            tracking: PitchTracking::new(rate, WINDOW, HOP, minimum),
             rate,
             decimation,
             phase: 0,
@@ -210,7 +221,7 @@ impl Detector {
         match self.mpm.detect(&self.frame, self.rate.round() as u32) {
             Some(pitch) => {
                 let hz = pitch.frequency * self.rate / self.rate.round();
-                let valid = pitch.clarity >= threshold && (50.0..=1000.0).contains(&hz);
+                let valid = pitch.clarity >= threshold && (self.minimum..=1000.0).contains(&hz);
                 Estimate {
                     frequency: if valid { hz } else { 0.0 },
                     clarity: pitch.clarity,
@@ -222,5 +233,98 @@ impl Detector {
                 ..Estimate::default()
             },
         }
+    }
+}
+
+/// Both profiles are prepared off the audio thread; only the selected one runs.
+pub struct Detector {
+    pub mode: DetectionMode,
+    pub target: Target,
+    pub rate: f32,
+    range: DetectionRange,
+    standard: Box<DetectorCore<WINDOW, 640, 520, 1280>>,
+    extended: Box<DetectorCore<EXTENDED_WINDOW, 760, 640, 1520>>,
+}
+
+macro_rules! dispatch_detector {
+    ($self:ident, $method:ident($($arg:expr),* $(,)?)) => {
+        match $self.range {
+            DetectionRange::Standard => $self.standard.$method($($arg),*),
+            DetectionRange::Low => $self.extended.$method($($arg),*),
+        }
+    };
+}
+
+impl Detector {
+    pub fn new(sample_rate: f32) -> Self {
+        let standard = Box::new(DetectorCore::new(
+            sample_rate,
+            DetectionRange::Standard.minimum(),
+        ));
+        let rate = standard.rate;
+        Self {
+            mode: DetectionMode::default(),
+            target: Target::default(),
+            rate,
+            range: DetectionRange::default(),
+            standard,
+            extended: Box::new(DetectorCore::new(
+                sample_rate,
+                DetectionRange::Low.minimum(),
+            )),
+        }
+    }
+
+    pub fn configure_range(&mut self, range: DetectionRange) -> bool {
+        if self.range == range {
+            return false;
+        }
+        self.range = range;
+        self.reset();
+        true
+    }
+
+    pub fn window_samples(&self) -> usize {
+        match self.range {
+            DetectionRange::Standard => WINDOW,
+            DetectionRange::Low => EXTENDED_WINDOW,
+        }
+    }
+
+    pub fn extended_decision_age_samples(&self) -> usize {
+        self.extended.maximum_decision_age_samples()
+    }
+
+    pub fn reset(&mut self) {
+        dispatch_detector!(self, reset());
+    }
+
+    pub fn maximum_decision_age_samples(&self) -> usize {
+        dispatch_detector!(self, maximum_decision_age_samples())
+    }
+
+    pub fn decision_ages(&self) -> Option<(usize, usize)> {
+        dispatch_detector!(self, decision_ages())
+    }
+
+    pub fn analysis_center_age_samples(&self) -> usize {
+        dispatch_detector!(self, analysis_center_age_samples())
+    }
+
+    pub fn push(&mut self, samples: [f32; 2]) -> bool {
+        match self.range {
+            DetectionRange::Standard => self.standard.mode = self.mode,
+            DetectionRange::Low => self.extended.mode = self.mode,
+        }
+        dispatch_detector!(self, push(samples))
+    }
+
+    pub fn analyze(&mut self, gate_db: f32, threshold: f32) -> Estimate {
+        let target = self.target.for_minimum(self.range.minimum());
+        match self.range {
+            DetectionRange::Standard => self.standard.target = target,
+            DetectionRange::Low => self.extended.target = target,
+        }
+        dispatch_detector!(self, analyze(gate_db, threshold))
     }
 }

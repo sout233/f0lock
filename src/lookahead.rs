@@ -66,12 +66,18 @@ pub struct Lookahead {
     sample_rate: f32,
     minimum: usize,
     delay: usize,
+    duration: LookaheadTime,
     gate_db: f32,
     gate_amplitude: f32,
 }
 
 impl Lookahead {
+    #[cfg(test)]
     pub fn new(sample_rate: f32, maximum_decision_age: usize) -> Self {
+        Self::with_capacity(sample_rate, maximum_decision_age, maximum_decision_age)
+    }
+
+    pub fn with_capacity(sample_rate: f32, minimum: usize, maximum_decision_age: usize) -> Self {
         let capacity = LookaheadTime::Ms300.samples(sample_rate, maximum_decision_age) + 1;
 
         Self {
@@ -79,8 +85,9 @@ impl Lookahead {
             time: 0,
             enabled: false,
             sample_rate,
-            minimum: maximum_decision_age,
-            delay: LookaheadTime::default().samples(sample_rate, maximum_decision_age),
+            minimum,
+            delay: LookaheadTime::default().samples(sample_rate, minimum),
+            duration: LookaheadTime::default(),
             gate_db: -55.0,
             gate_amplitude: 10.0_f32.powf(-55.0 / 20.0),
         }
@@ -93,8 +100,18 @@ impl Lookahead {
     pub fn configure(&mut self, enabled: bool, duration: LookaheadTime) -> bool {
         let previous = self.latency_samples();
         self.enabled = enabled;
+        self.duration = duration;
         self.delay = duration.samples(self.sample_rate, self.minimum);
         previous != self.latency_samples()
+    }
+
+    pub fn set_minimum(&mut self, minimum: usize) {
+        self.minimum = minimum;
+        self.delay = self.duration.samples(self.sample_rate, minimum);
+        assert!(
+            self.delay < self.frames.len(),
+            "Lookahead capacity is too small"
+        );
     }
 
     pub fn reset(&mut self) {
