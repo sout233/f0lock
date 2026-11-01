@@ -207,7 +207,7 @@ fn tab_switch_animates_point_knobs_with_ease_out_without_changing_parameters() {
 }
 
 #[test]
-fn spectrum_does_not_add_or_drag_points() {
+fn spectrum_drags_existing_points_without_adding_points() {
     let mut f = Fixture::new();
     let blank = Pos2::new(600.0, 140.0);
     f.click(blank, egui::PointerButton::Primary);
@@ -236,9 +236,19 @@ fn spectrum_does_not_add_or_drag_points() {
         modifiers: Default::default(),
     }]);
 
-    assert!((f.editor.params.band(1).ratio.value() - 2.0).abs() < 1e-5);
-    assert_eq!(f.editor.params.band(1).gain.value(), 0.0);
-    assert!(f.host.events.lock().unwrap().is_empty());
+    let expected_ratio = 2.0 * (80.0 / 786.0 * 1000.0_f32.ln()).exp();
+    let expected_gain = 40.0 / 155.0 * 48.0;
+
+    assert!((f.editor.params.band(1).ratio.value() - expected_ratio).abs() < 1e-4);
+    assert!((f.editor.params.band(1).gain.value() - expected_gain).abs() < 1e-4);
+    assert_eq!(f.editor.selected, Some(1));
+    assert!(f.editor.point_drag.is_none());
+
+    let events = f.host.events.lock().unwrap();
+
+    assert_eq!(events.iter().filter(|&&event| event == "begin").count(), 2);
+    assert_eq!(events.iter().filter(|&&event| event == "end").count(), 2);
+    assert!(events.contains(&"set"));
 }
 
 #[test]

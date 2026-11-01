@@ -10,6 +10,7 @@ use std::{sync::Arc, time::Duration};
 mod controls;
 mod credits;
 mod knob;
+mod point_drag;
 mod point_tabs;
 mod processing_bar;
 mod settings;
@@ -31,6 +32,7 @@ pub struct F0Editor {
     gui: Option<GuiContext>,
     selected: Option<usize>,
     context_point: Option<usize>,
+    point_drag: Option<point_drag::PointDrag>,
     notice: Option<Notice>,
     about_open: bool,
     about_credits: bool,
@@ -68,6 +70,7 @@ impl F0Editor {
             gui: None,
             selected,
             context_point: None,
+            point_drag: None,
             notice: None,
             about_open: false,
             about_credits: false,
@@ -81,6 +84,7 @@ impl F0Editor {
     pub(crate) fn draw(&mut self, ui: &mut egui::Ui) {
         let mode = self.params.mode.value();
         if mode != self.shown_mode {
+            self.finish_point_drag();
             self.mode_selection[self.shown_mode as usize] = self.selected;
             self.selected = self.mode_selection[mode as usize];
             self.shown_mode = mode;
@@ -200,6 +204,7 @@ impl NiceEguiApp for F0Editor {
     }
 
     fn editor_closed(&mut self) {
+        self.finish_point_drag();
         self.gui = None;
         self.context_point = None;
         self.about_open = false;

@@ -50,6 +50,7 @@ impl F0Editor {
         draw_grid(&p, &plot, outer);
 
         if self.params.bypass.value() {
+            self.finish_point_drag();
             self.context_point = None;
             p.text(
                 plot.rect.center(),
@@ -150,6 +151,7 @@ impl F0Editor {
         }
 
         self.target_controls(ui, plot.rect, plot.max_hz);
+        self.drag_spectrum_points(ui, &markers, plot.rect, plot.max_hz, layout_f0);
 
         let mut readout = if v[0] > 0.0 {
             format!("{:.1} Hz   {:.0}%", v[0], v[1] * 100.0)
