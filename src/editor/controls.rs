@@ -70,6 +70,8 @@ impl F0Editor {
         let setter = gui.param_setter();
         let band = self.params.band(self.selected.unwrap_or(0));
         let selected = self.selected.is_some();
+        let by_channel = self.params.pitch_source.value() == crate::midi::PitchSource::Midi
+            && self.params.midi_mode.value() == crate::midi::MidiMode::ByChannel;
         let supported = selected && band.kind.value().has_gain();
         let dynamic_color = if supported && band.dynamics.enabled.value() {
             self.accent()
@@ -322,6 +324,49 @@ impl F0Editor {
             );
         }
 
+        if by_channel {
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(Rect::from_min_max(at(260.0, 362.0), at(340.0, 384.0))),
+                |ui| {
+                    *ui.visuals_mut() = egui::Visuals::light();
+                    ui.visuals_mut().selection.bg_fill = accent.gamma_multiply(0.25);
+                    ui.visuals_mut().selection.stroke = Stroke::new(1.0, accent);
+                    let button = ui
+                        .add_enabled_ui(selected, |ui| {
+                            ui.add_sized(
+                                Vec2::new(80.0, 22.0),
+                                egui::Button::new(format!("Ch {}  ▾", band.midi_channel.value())),
+                            )
+                        })
+                        .inner
+                        .on_hover_text("MIDI Channel for this point");
+
+                    egui::Popup::menu(&button)
+                        .align(egui::emath::RectAlign::TOP_START)
+                        .width(80.0)
+                        .show(|ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(220.0)
+                                .show(ui, |ui| {
+                                    for channel in 1..=16 {
+                                        if ui
+                                            .selectable_label(
+                                                band.midi_channel.value() == channel,
+                                                format!("Ch {channel}"),
+                                            )
+                                            .clicked()
+                                        {
+                                            set_value(&setter, band.midi_channel, channel);
+                                            egui::Popup::close_all(ui.ctx());
+                                        }
+                                    }
+                                });
+                        });
+                },
+            );
+        }
+
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(Rect::from_min_max(at(375.0, 362.0), at(495.0, 384.0))),
             |ui| {
@@ -384,7 +429,7 @@ impl F0Editor {
 
         if selected && v[7] > 0.0 && v[2] > 0.0 {
             p.text(
-                at(300.0, 373.0),
+                at(300.0, if by_channel { 397.0 } else { 373.0 }),
                 egui::Align2::CENTER_CENTER,
                 format!(
                     "{:.1} Hz",

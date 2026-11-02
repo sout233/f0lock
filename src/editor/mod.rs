@@ -61,13 +61,13 @@ const POINT_COLORS: [Color32; BAND_COUNT] = [
 const PREVIEW_F0: f32 = 150.0;
 
 impl F0Editor {
-    fn midi_poly(&self) -> bool {
+    fn midi_per_point(&self) -> bool {
         self.params.pitch_source.value() == crate::midi::PitchSource::Midi
-            && self.params.midi_mode.value() == crate::midi::MidiMode::Poly
+            && self.params.midi_mode.value() != crate::midi::MidiMode::Mono
     }
 
     fn point_pitch(&self, index: usize, fallback: f32) -> f32 {
-        if self.midi_poly() {
+        if self.midi_per_point() {
             let frequency = self.telemetry.point_pitch(index);
             if frequency > 0.0 {
                 return frequency;

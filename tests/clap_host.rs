@@ -451,7 +451,7 @@ fn packaged_clap_processes_and_accepts_host_automation() {
         assert_eq!(sidechain_info.channel_count, 2);
         assert_eq!(sidechain_info.flags & CLAP_AUDIO_PORT_IS_MAIN, 0);
         let count = (*params).count.unwrap()(plugin);
-        assert_eq!(count, 228);
+        assert_eq!(count, 244);
         let mut gain_id = None;
         let mut bypass_id = None;
 

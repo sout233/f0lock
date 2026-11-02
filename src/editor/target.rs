@@ -11,16 +11,22 @@ impl F0Editor {
                     plot.right_top() + Vec2::new(-139.0, 6.0),
                     Vec2::new(133.0, 25.0),
                 ),
-                egui::Label::new(if self.midi_poly() {
-                    "MIDI Poly Tracking"
-                } else {
-                    "MIDI Tracking"
+                egui::Label::new(match self.params.midi_mode.value() {
+                    crate::midi::MidiMode::Mono => "MIDI Tracking",
+                    crate::midi::MidiMode::Poly => "MIDI Poly Tracking",
+                    crate::midi::MidiMode::ByChannel => "MIDI By Channel",
                 }),
             )
-            .on_hover_text(if self.midi_poly() {
-                "Each point follows its assigned MIDI note; Point Ratio still applies."
-            } else {
-                "Route MIDI notes to this plugin. Latest held note sets the EQ pitch."
+            .on_hover_text(match self.params.midi_mode.value() {
+                crate::midi::MidiMode::Mono => {
+                    "Route MIDI notes to this plugin. Latest held note sets the EQ pitch."
+                }
+                crate::midi::MidiMode::Poly => {
+                    "Each point follows its assigned MIDI note; Point Ratio still applies."
+                }
+                crate::midi::MidiMode::ByChannel => {
+                    "Each point follows its MIDI channel. Latest held note on that channel wins."
+                }
             });
             return;
         }

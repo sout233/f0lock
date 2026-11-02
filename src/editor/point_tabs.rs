@@ -178,7 +178,7 @@ impl F0Editor {
         set_value(
             &setter,
             band.ratio,
-            if self.midi_poly() {
+            if self.midi_per_point() {
                 1.0
             } else {
                 (index + 1) as f32
@@ -188,6 +188,9 @@ impl F0Editor {
         set_value(&setter, band.q, 3.0);
         set_value(&setter, band.kind, FilterKind::Peak);
         set_value(&setter, band.slope, crate::filter::CutSlope::default());
+        if band.midi_channel.value() != (index + 1) as i32 {
+            set_value(&setter, band.midi_channel, (index + 1) as i32);
+        }
         set_value(&setter, band.enabled, true);
         set_value(&setter, &band.dynamics.enabled, false);
         set_value(&setter, &band.dynamics.threshold, -24.0);

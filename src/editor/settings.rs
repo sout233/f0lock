@@ -213,9 +213,11 @@ impl F0Editor {
                             set_value(&setter, &params.midi_bend_range, value);
                         }
                     });
-                    let hint = if params.midi_mode.value() == MidiMode::Poly {
-                        "Each point follows one note. New notes use free points, then steal the oldest note. Point Ratio still applies."
-                    } else { "Latest held note wins. Audio detection, Target, Gate and Clarity do not affect MIDI pitch." };
+                    let hint = match params.midi_mode.value() {
+                        MidiMode::Mono => "Latest held note wins. Audio detection, Target, Gate and Clarity do not affect MIDI pitch.",
+                        MidiMode::Poly => "Each point follows one note. New notes use free points, then steal the oldest note. Point Ratio still applies.",
+                        MidiMode::ByChannel => "Choose MIDI Channel beside each point's EQ type. Latest held note per channel wins; bend and sustain remain independent.",
+                    };
                     ui.label(egui::RichText::new(hint).size(11.0).color(MUTED));
                 }
                 ui.add_enabled_ui(!midi, |ui| {

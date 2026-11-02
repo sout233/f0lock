@@ -93,7 +93,7 @@ impl F0Editor {
                 .telemetry
                 .midi_active
                 .load(std::sync::atomic::Ordering::Relaxed);
-            let color = if !b.enabled.value() || (self.midi_poly() && active & (1 << i) == 0) {
+            let color = if !b.enabled.value() || (self.midi_per_point() && active & (1 << i) == 0) {
                 Color32::from_gray(91)
             } else {
                 POINT_COLORS[i]
@@ -167,13 +167,17 @@ impl F0Editor {
 
         let midi = self.params.pitch_source.value() == crate::midi::PitchSource::Midi;
         if midi {
-            readout = if self.midi_poly() {
+            readout = if self.midi_per_point() {
                 let active = self
                     .telemetry
                     .midi_active
                     .load(std::sync::atomic::Ordering::Relaxed)
                     .count_ones();
-                format!("MIDI Poly · {active} notes")
+                if self.params.midi_mode.value() == crate::midi::MidiMode::ByChannel {
+                    format!("MIDI Ch · {active} points")
+                } else {
+                    format!("MIDI Poly · {active} notes")
+                }
             } else if v[0] > 0.0 {
                 format!("{:.1} Hz · MIDI", v[0])
             } else {

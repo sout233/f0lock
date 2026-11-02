@@ -11,14 +11,18 @@ pub enum MidiMode {
     #[id = "poly"]
     #[name = "Poly: one note per point"]
     Poly,
+    #[id = "by_channel"]
+    #[name = "By Channel"]
+    ByChannel,
 }
 
 impl MidiMode {
-    pub const ALL: [Self; 2] = [Self::Mono, Self::Poly];
+    pub const ALL: [Self; 3] = [Self::Mono, Self::Poly, Self::ByChannel];
     pub fn label(self) -> &'static str {
         match self {
             Self::Mono => "Mono",
             Self::Poly => "Poly: one note per point",
+            Self::ByChannel => "By Channel",
         }
     }
 }
@@ -82,6 +86,8 @@ pub struct MidiTracker {
     frequency: f32,
     point_mask: u8,
     point_frequencies: [f32; BAND_COUNT],
+    channel_pitches: [f32; 16],
+    channel_order: [usize; 16],
 }
 
 impl Default for MidiTracker {
@@ -95,6 +101,8 @@ impl Default for MidiTracker {
             frequency: 0.0,
             point_mask: 1,
             point_frequencies: [0.0; BAND_COUNT],
+            channel_pitches: [0.0; 16],
+            channel_order: [0; 16],
         }
     }
 }
@@ -106,6 +114,8 @@ impl MidiTracker {
         self.sustain.fill(false);
         self.frequency = 0.0;
         self.point_frequencies.fill(0.0);
+        self.channel_pitches.fill(0.0);
+        self.channel_order.fill(0);
     }
 
     pub fn frequency(&self) -> f32 {
@@ -114,6 +124,25 @@ impl MidiTracker {
 
     pub fn point_frequencies(&self) -> [f32; BAND_COUNT] {
         self.point_frequencies
+    }
+
+    pub fn channel_points(&self, channels: [u8; BAND_COUNT]) -> (f32, [f32; BAND_COUNT]) {
+        let mut latest = 0;
+        let mut frequency = 0.0;
+        let points = std::array::from_fn(|i| {
+            if self.point_mask & (1 << i) == 0 {
+                return 0.0;
+            }
+
+            let channel = usize::from(channels[i]);
+            if self.channel_order[channel] > latest {
+                latest = self.channel_order[channel];
+                frequency = self.channel_pitches[channel];
+            }
+            self.channel_pitches[channel]
+        });
+
+        (frequency, points)
     }
 
     pub fn set_point_mask(&mut self, mask: u8) {
@@ -201,9 +230,19 @@ impl MidiTracker {
             }
         }
         self.point_frequencies.fill(0.0);
-        for note in &self.notes[..self.len] {
+        let mut channel_notes = [None; 16];
+        for (index, note) in self.notes[..self.len].iter().enumerate() {
             if let Some(slot) = note.slot {
                 self.point_frequencies[slot] = self.note_frequency(*note);
+            }
+            channel_notes[usize::from(note.channel)] = Some((index, *note));
+        }
+        self.channel_pitches.fill(0.0);
+        self.channel_order.fill(0);
+        for (channel, note) in channel_notes.into_iter().enumerate() {
+            if let Some((index, note)) = note {
+                self.channel_pitches[channel] = self.note_frequency(note);
+                self.channel_order[channel] = index + 1;
             }
         }
         self.frequency = if self.len == 0 {

@@ -162,6 +162,9 @@ pub struct ProcessingParams {
     #[id = "f0_slope"]
     pub slope: EnumParam<CutSlope>,
 
+    #[id = "f0_midi_channel"]
+    pub midi_channel: IntParam,
+
     #[nested(array, group = "Additional band")]
     pub additional: [BandParams; BAND_COUNT - 1],
 
@@ -291,6 +294,7 @@ impl ProcessingParams {
             ratio: ratio_param(name("F0 ratio")),
             kind: EnumParam::new(name("F0 type"), FilterKind::Peak),
             slope: EnumParam::new(name("F0 slope"), CutSlope::default()),
+            midi_channel: midi_channel_param(name("F0 MIDI Channel"), 1),
 
             additional: std::array::from_fn(|i| BandParams::new(i + 2, prefix)),
         }
@@ -314,11 +318,18 @@ pub struct BandParams {
     #[id = "band_slope"]
     pub slope: EnumParam<CutSlope>,
 
+    #[id = "band_midi_channel"]
+    pub midi_channel: IntParam,
+
     #[id = "band_exists"]
     pub exists: BoolParam,
 
     #[id = "band_enabled"]
     pub enabled: BoolParam,
+}
+
+fn midi_channel_param(name: impl Into<String>, channel: usize) -> IntParam {
+    IntParam::new(name, channel as i32, IntRange::Linear { min: 1, max: 16 }).non_automatable()
 }
 
 fn ratio_param(name: impl Into<String>) -> FloatParam {
@@ -376,6 +387,7 @@ impl BandParams {
             ratio: ratio_param(format!("{prefix}Band {number} ratio")),
             kind: EnumParam::new(format!("{prefix}Band {number} type"), FilterKind::Peak),
             slope: EnumParam::new(format!("{prefix}Band {number} slope"), CutSlope::default()),
+            midi_channel: midi_channel_param(format!("{prefix}Band {number} MIDI Channel"), number),
 
             exists: BoolParam::new(format!("{prefix}Band {number} exists"), false),
             enabled: BoolParam::new(format!("{prefix}Band {number} enabled"), true),
@@ -385,6 +397,7 @@ impl BandParams {
 
 #[derive(Clone, Copy)]
 pub struct BandRef<'a> {
+    pub midi_channel: &'a IntParam,
     pub dynamics: &'a DynamicParams,
     pub gain: &'a FloatParam,
     pub q: &'a FloatParam,
@@ -398,6 +411,7 @@ pub struct BandRef<'a> {
 impl BandRef<'_> {
     pub fn control(self) -> BandControl {
         BandControl {
+            midi_channel: (self.midi_channel.value() - 1) as u8,
             dynamics: self.dynamics.control(),
             gain: self.gain.value(),
             q: self.q.value(),
@@ -424,6 +438,7 @@ impl ProcessingParams {
     pub fn band(&self, index: usize) -> BandRef<'_> {
         if index == 0 {
             BandRef {
+                midi_channel: &self.midi_channel,
                 dynamics: &self.dynamics[index],
                 gain: &self.gain,
                 q: &self.q,
@@ -437,6 +452,7 @@ impl ProcessingParams {
             let b = &self.additional[index - 1];
 
             BandRef {
+                midi_channel: &b.midi_channel,
                 dynamics: &self.dynamics[index],
                 gain: &b.gain,
                 q: &b.q,

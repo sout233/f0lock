@@ -7,6 +7,7 @@ pub const BAND_VALUES: usize = 10 + (CUT_SECTIONS - 1) * 6;
 
 #[derive(Clone, Copy, Debug)]
 pub struct BandControl {
+    pub midi_channel: u8,
     pub dynamics: DynamicControl,
     pub exists: bool,
     pub enabled: bool,
@@ -20,6 +21,7 @@ pub struct BandControl {
 impl Default for BandControl {
     fn default() -> Self {
         Self {
+            midi_channel: 0,
             dynamics: DynamicControl::default(),
             exists: false,
             enabled: true,

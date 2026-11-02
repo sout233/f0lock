@@ -27,7 +27,10 @@ pub struct Controls {
 
 impl Default for Controls {
     fn default() -> Self {
-        let mut bands = [BandControl::default(); BAND_COUNT];
+        let mut bands = std::array::from_fn(|i| BandControl {
+            midi_channel: i as u8,
+            ..BandControl::default()
+        });
         bands[0].exists = true;
         bands[0].gain = -6.0;
 
@@ -204,7 +207,7 @@ impl Engine {
     }
 
     pub fn point_pitch(&self, index: usize) -> f32 {
-        if self.pitch_source == PitchSource::Midi && self.midi_mode == MidiMode::Poly {
+        if self.pitch_source == PitchSource::Midi && self.midi_mode != MidiMode::Mono {
             self.point_frequencies[index]
         } else {
             self.frequency
@@ -268,10 +271,18 @@ impl Engine {
         self.detector.mode = controls.detection;
 
         let decision = if self.pitch_source == PitchSource::Midi {
-            let frequency = self.midi.frequency();
+            let (frequency, midi_frequencies) = match self.midi_mode {
+                MidiMode::Mono => (self.midi.frequency(), None),
+                MidiMode::Poly => (self.midi.frequency(), Some(self.midi.point_frequencies())),
+                MidiMode::ByChannel => {
+                    let (frequency, points) = self
+                        .midi
+                        .channel_points(std::array::from_fn(|i| controls.bands[i].midi_channel));
+                    (frequency, Some(points))
+                }
+            };
             Some(Decision {
-                midi_frequencies: (self.midi_mode == MidiMode::Poly)
-                    .then(|| self.midi.point_frequencies()),
+                midi_frequencies,
                 dated: true,
                 age: 0,
                 prelock_age: None,
@@ -404,7 +415,7 @@ impl Engine {
 
         let mut wet = input;
 
-        let poly = self.pitch_source == PitchSource::Midi && self.midi_mode == MidiMode::Poly;
+        let per_point = self.pitch_source == PitchSource::Midi && self.midi_mode != MidiMode::Mono;
         for (i, (band, control)) in self.bands.iter_mut().zip(controls.bands).enumerate() {
             let mut envelope_steps = self.envelope_steps;
             if controls.infinite_release && control.exists && control.enabled {
@@ -416,12 +427,12 @@ impl Engine {
                 wet,
                 frame.source,
                 control,
-                if poly {
+                if per_point {
                     self.point_frequencies[i]
                 } else {
                     self.frequency
                 },
-                if poly {
+                if per_point {
                     self.point_voiced[i]
                 } else {
                     self.source_started
