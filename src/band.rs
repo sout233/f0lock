@@ -14,6 +14,7 @@ pub struct BandControl {
     pub ratio: f32,
     pub gain: f32,
     pub q: f32,
+    pub q_follow: f32,
     pub kind: FilterKind,
     pub slope: CutSlope,
 }
@@ -28,6 +29,7 @@ impl Default for BandControl {
             ratio: 1.0,
             gain: 0.0,
             q: 3.0,
+            q_follow: 0.0,
             kind: FilterKind::Peak,
             slope: CutSlope::default(),
         }
@@ -89,12 +91,21 @@ impl Band {
         }
 
         let target_frequency = (f0 * control.ratio).min(rate * 0.49);
+        // Follow the source pitch, independently of this point's F0 Ratio.
+        // Use the existing Q range for both manual and pitch-controlled Q.
+        let target_q = if control.q_follow == 0.0 {
+            control.q
+        } else if voiced {
+            (control.q * (f0 / 220.0).powf(control.q_follow)).clamp(0.3, 16.0)
+        } else {
+            self.q
+        };
         let dynamic_gain = self.dynamics.process(
             source,
             control.dynamics,
             rate,
             target_frequency,
-            control.q,
+            target_q,
             control.kind,
         );
         let target_gain = control.gain + dynamic_gain;
@@ -114,13 +125,13 @@ impl Band {
             self.log_ratio = f64::from(control.ratio).ln();
             self.frequency = target_frequency;
             self.gain = target_gain;
-            self.q = control.q;
+            self.q = target_q;
         }
 
         self.log_ratio += f64::from(alpha) * (f64::from(control.ratio).ln() - self.log_ratio);
         self.frequency = (f0 * self.log_ratio.exp() as f32).min(rate * 0.49);
         self.gain += alpha * (target_gain - self.gain);
-        self.q += alpha * (control.q - self.q);
+        self.q += alpha * (target_q - self.q);
 
         let target = if control.kind.is_cut() {
             Coefficients::cut_section(

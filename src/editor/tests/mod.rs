@@ -200,7 +200,7 @@ impl Fixture {
     }
 
     fn knob_position(&self, center: Pos2) -> f32 {
-        let scale = 0.85;
+        let scale = if center.y < 551.0 { 27.0 / 35.0 } else { 0.85 };
         let direction = self
             .shapes
             .iter()

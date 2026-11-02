@@ -7,6 +7,22 @@ fn enter_number(fixture: &mut Fixture, center: Pos2, text: &str) {
 }
 
 #[test]
+fn q_follow_accepts_bipolar_values_only_for_the_selected_point() {
+    let mut f = Fixture::new();
+    f.add();
+    f.host.events.lock().unwrap().clear();
+
+    enter_number(&mut f, Pos2::new(275.0, 465.0), "-1.25");
+    f.click_text("Apply");
+    f.frame(vec![]);
+
+    assert_eq!(f.editor.params.band(1).q_follow.value(), -1.25);
+    assert_eq!(f.editor.params.band(0).q_follow.value(), 0.0);
+    assert_eq!(f.editor.params.sidechain.band(1).q_follow.value(), 0.0);
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+}
+
+#[test]
 fn envelope_knobs_accept_precise_times_through_host_gestures() {
     let mut f = Fixture::new();
 
@@ -89,7 +105,7 @@ fn numeric_entry_targets_only_the_selected_point_and_ends_switch_animation() {
     f.add();
     f.host.events.lock().unwrap().clear();
 
-    let center = Pos2::new(285.0, 465.0);
+    let center = Pos2::new(385.0, 465.0);
     enter_number(&mut f, center, "2.126");
     f.click_text("Apply");
     f.frame(vec![]);
@@ -110,7 +126,7 @@ fn escape_and_tab_switch_discard_unconfirmed_input() {
     f.add();
     f.host.events.lock().unwrap().clear();
 
-    enter_number(&mut f, Pos2::new(65.0, 465.0), "6.75");
+    enter_number(&mut f, Pos2::new(55.0, 465.0), "6.75");
     f.click_text("Point 1");
     f.frame(vec![]);
 

@@ -36,7 +36,7 @@ fn cut_slope_menu_is_conditional_and_edits_the_selected_banks_parameter() {
     assert!(has_text(&f, "96 dB/oct"));
     f.click_text("96 dB/oct");
     f.click_text("6 dB/oct");
-    f.click(Pos2::new(175.0, 465.0), egui::PointerButton::Secondary);
+    f.click(Pos2::new(165.0, 465.0), egui::PointerButton::Secondary);
     f.frame(vec![]);
     assert!(
         !has_text(&f, "Apply"),

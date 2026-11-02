@@ -5,5 +5,6 @@ mod lookahead;
 mod midi;
 mod multiband;
 mod plugin;
+mod q_follow;
 mod sidechain;
 mod spectrum;

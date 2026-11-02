@@ -154,6 +154,7 @@ impl F0Editor {
         if ui.button("Reset gain / Q").clicked() {
             set_value(&setter, b.gain, 0.0);
             set_value(&setter, b.q, 3.0);
+            set_value(&setter, b.q_follow, 0.0);
             egui::Popup::close_all(ui.ctx());
         }
 
@@ -186,6 +187,7 @@ impl F0Editor {
         );
         set_value(&setter, band.gain, if index == 0 { -6.0 } else { 0.0 });
         set_value(&setter, band.q, 3.0);
+        set_value(&setter, band.q_follow, 0.0);
         set_value(&setter, band.kind, FilterKind::Peak);
         set_value(&setter, band.slope, crate::filter::CutSlope::default());
         if band.midi_channel.value() != (index + 1) as i32 {

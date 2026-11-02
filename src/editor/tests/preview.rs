@@ -55,7 +55,7 @@ fn editor_renders_real_signal_and_exports_meshes() {
     let mut textures = Vec::new();
     let mut meshes = Vec::new();
 
-    let pos = Pos2::new(175.0, 465.0);
+    let pos = Pos2::new(165.0, 465.0);
     let button = |pressed| egui::Event::PointerButton {
         pos,
         button: egui::PointerButton::Primary,

@@ -4,7 +4,7 @@ use super::*;
 fn dynamics_indicator_and_label_toggle_the_same_parameter() {
     let mut f = Fixture::new();
     f.host.events.lock().unwrap().clear();
-    f.click(Pos2::new(383.0, 373.0), egui::PointerButton::Primary);
+    f.click(Pos2::new(483.0, 373.0), egui::PointerButton::Primary);
     assert!(f.editor.params.band(0).dynamics.enabled.value());
     f.click_text("Dynamics");
     assert!(!f.editor.params.band(0).dynamics.enabled.value());
@@ -85,7 +85,7 @@ fn dynamics_switch_preserves_all_controls_and_edits_only_the_selected_point() {
     f.click_text("Point 2");
     f.frame(vec![]);
 
-    f.click(Pos2::new(680.0, 465.0), egui::PointerButton::Secondary);
+    f.click(Pos2::new(725.0, 465.0), egui::PointerButton::Secondary);
     f.frame(vec![]);
     f.frame(vec![egui::Event::Text("33.25".to_owned())]);
     f.click_text("Apply");

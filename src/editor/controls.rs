@@ -28,7 +28,7 @@ impl F0Editor {
         }
 
         for (x, top, bottom) in [
-            (350.0, 362.0, 542.0),
+            (450.0, 362.0, 542.0),
             (350.0, 568.0, 692.0),
             (630.0, 568.0, 692.0),
         ] {
@@ -84,7 +84,7 @@ impl F0Editor {
             (
                 band.gain,
                 "Gain",
-                65.0,
+                55.0,
                 465.0,
                 true,
                 supported,
@@ -93,16 +93,25 @@ impl F0Editor {
             (
                 band.q,
                 "Q",
-                175.0,
+                165.0,
                 465.0,
                 false,
                 selected && !(band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6),
                 self.accent(),
             ),
             (
+                band.q_follow,
+                "Q Follow",
+                275.0,
+                465.0,
+                true,
+                selected && !(band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6),
+                self.accent(),
+            ),
+            (
                 band.ratio,
                 "F0 Ratio",
-                285.0,
+                385.0,
                 465.0,
                 false,
                 selected,
@@ -111,7 +120,7 @@ impl F0Editor {
             (
                 &band.dynamics.threshold,
                 "Threshold",
-                420.0,
+                505.0,
                 465.0,
                 false,
                 supported,
@@ -120,7 +129,7 @@ impl F0Editor {
             (
                 &band.dynamics.range,
                 "Range",
-                550.0,
+                615.0,
                 465.0,
                 false,
                 supported,
@@ -129,7 +138,7 @@ impl F0Editor {
             (
                 &band.dynamics.attack,
                 "Dyn.Attack",
-                680.0,
+                725.0,
                 465.0,
                 false,
                 supported,
@@ -138,7 +147,7 @@ impl F0Editor {
             (
                 &band.dynamics.release,
                 "Dyn.Release",
-                810.0,
+                835.0,
                 465.0,
                 false,
                 supported,
@@ -214,7 +223,14 @@ impl F0Editor {
             ui.scope_builder(builder, |ui| {
                 ui.visuals_mut().selection.bg_fill = color.gamma_multiply(0.3);
                 ui.visuals_mut().selection.stroke = Stroke::new(1.0, color);
-                knob::knob(ui, param, &setter, at(x, y), 35.0 * 0.85, label, bipolar);
+                let radius = if y < 551.0 { 27.0 } else { 35.0 * 0.85 };
+                let response = knob::knob(ui, param, &setter, at(x, y), radius, label, bipolar);
+                if label == "Q Follow" {
+                    response.on_hover_text(
+                        "Q at 220 Hz × (pitch / 220 Hz)^Follow. +1 doubles Q per octave; \
+                         −1 halves it. 0 keeps Q fixed. Effective Q stays within 0.3–16.",
+                    );
+                }
             });
         }
 
@@ -368,18 +384,18 @@ impl F0Editor {
         }
 
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(375.0, 362.0), at(495.0, 384.0))),
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(475.0, 362.0), at(595.0, 384.0))),
             |ui| {
                 ui.add_enabled_ui(supported, |ui| {
                     let response = ui
                         .interact(
-                            Rect::from_min_max(at(375.0, 362.0), at(495.0, 384.0)),
+                            Rect::from_min_max(at(475.0, 362.0), at(595.0, 384.0)),
                             ui.make_persistent_id("dynamics-switch"),
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                     let lit = supported && band.dynamics.enabled.value();
-                    let lamp = at(383.0, 373.0);
+                    let lamp = at(483.0, 373.0);
                     let painter = ui.painter();
                     let (glow, core) = knob::light_colors(accent);
 
@@ -402,7 +418,7 @@ impl F0Editor {
                         if lit { core } else { Color32::from_gray(110) },
                     );
                     painter.text(
-                        at(397.0, 373.0),
+                        at(497.0, 373.0),
                         egui::Align2::LEFT_CENTER,
                         "Dynamics",
                         FontId::proportional(12.0),

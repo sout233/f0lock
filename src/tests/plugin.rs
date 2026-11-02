@@ -212,12 +212,12 @@ fn default_plugin_exports_unique_parameter_ids() {
     let plugin = crate::F0Lock::default();
     let map = plugin.params.param_map();
 
-    assert_eq!(map.len(), 244);
+    assert_eq!(map.len(), 260);
     let mut ids: Vec<_> = map.iter().map(|v| &v.0).collect();
     ids.sort();
     ids.dedup();
 
-    assert_eq!(ids.len(), 244);
+    assert_eq!(ids.len(), 260);
 }
 
 #[test]

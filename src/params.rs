@@ -123,6 +123,9 @@ pub struct ProcessingParams {
     #[id = "q"]
     pub q: FloatParam,
 
+    #[id = "q_follow"]
+    pub q_follow: FloatParam,
+
     #[id = "tracking"]
     pub tracking: FloatParam,
 
@@ -213,6 +216,8 @@ impl ProcessingParams {
                 },
             )
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
+
+            q_follow: q_follow_param(name("Q Follow")),
 
             tracking: FloatParam::new(
                 name("Tracking"),
@@ -309,6 +314,9 @@ pub struct BandParams {
     #[id = "band_q"]
     pub q: FloatParam,
 
+    #[id = "band_q_follow"]
+    pub q_follow: FloatParam,
+
     #[id = "band_ratio"]
     pub ratio: FloatParam,
 
@@ -343,6 +351,18 @@ fn ratio_param(name: impl Into<String>) -> FloatParam {
         },
     )
     .with_value_to_string(formatters::v2s_f32_rounded(3))
+}
+
+fn q_follow_param(name: impl Into<String>) -> FloatParam {
+    FloatParam::new(
+        name,
+        0.0,
+        FloatRange::Linear {
+            min: -2.0,
+            max: 2.0,
+        },
+    )
+    .with_value_to_string(formatters::v2s_f32_rounded(2))
 }
 
 fn target_frequency_param(name: &str, default: f32) -> FloatParam {
@@ -384,6 +404,7 @@ impl BandParams {
             )
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
+            q_follow: q_follow_param(format!("{prefix}Band {number} Q Follow")),
             ratio: ratio_param(format!("{prefix}Band {number} ratio")),
             kind: EnumParam::new(format!("{prefix}Band {number} type"), FilterKind::Peak),
             slope: EnumParam::new(format!("{prefix}Band {number} slope"), CutSlope::default()),
@@ -401,6 +422,7 @@ pub struct BandRef<'a> {
     pub dynamics: &'a DynamicParams,
     pub gain: &'a FloatParam,
     pub q: &'a FloatParam,
+    pub q_follow: &'a FloatParam,
     pub ratio: &'a FloatParam,
     pub kind: &'a EnumParam<FilterKind>,
     pub slope: &'a EnumParam<CutSlope>,
@@ -415,6 +437,7 @@ impl BandRef<'_> {
             dynamics: self.dynamics.control(),
             gain: self.gain.value(),
             q: self.q.value(),
+            q_follow: self.q_follow.value(),
             ratio: self.ratio.value(),
             kind: self.kind.value(),
             slope: self.slope.value(),
@@ -442,6 +465,7 @@ impl ProcessingParams {
                 dynamics: &self.dynamics[index],
                 gain: &self.gain,
                 q: &self.q,
+                q_follow: &self.q_follow,
                 ratio: &self.ratio,
                 kind: &self.kind,
                 slope: &self.slope,
@@ -456,6 +480,7 @@ impl ProcessingParams {
                 dynamics: &self.dynamics[index],
                 gain: &b.gain,
                 q: &b.q,
+                q_follow: &b.q_follow,
                 ratio: &b.ratio,
                 kind: &b.kind,
                 slope: &b.slope,

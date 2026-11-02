@@ -102,16 +102,16 @@ fn tab_switch_changes_knob_theme_and_keeps_independent_gain() {
     f.frame(vec![]);
 
     assert_eq!(f.editor.accent(), POINT_COLORS[1]);
-    let q_region = Rect::from_center_size(Pos2::new(175.0, 465.0), Vec2::splat(100.0));
+    let q_region = Rect::from_center_size(Pos2::new(165.0, 465.0), Vec2::splat(100.0));
 
     assert!(f.shapes.iter().any(|s| match &s.shape {
-        egui::Shape::Path(path) => path.stroke.width == 3.0 * 0.85
+        egui::Shape::Path(path) => path.stroke.width == 3.0 * (27.0 / 35.0)
             && matches!(path.stroke.color, egui::epaint::ColorMode::Solid(c) if c == POINT_COLORS[1])
             && q_region.contains(path.visual_bounding_rect().center()),
         _ => false,
     }), "Q knob did not adopt Point 2's theme");
 
-    let pos = Pos2::new(65.0, 465.0);
+    let pos = Pos2::new(55.0, 465.0);
     f.frame(vec![
         egui::Event::PointerMoved(pos),
         egui::Event::PointerButton {
@@ -160,7 +160,7 @@ fn global_controls_stay_neutral_and_ratio_edits_the_selected_point() {
         }
     }
 
-    let pos = Pos2::new(285.0, 465.0);
+    let pos = Pos2::new(385.0, 465.0);
     f.frame(vec![egui::Event::PointerMoved(pos)]);
     f.frame(vec![egui::Event::PointerButton {
         pos,
@@ -199,7 +199,7 @@ fn tab_switch_animates_point_knobs_with_ease_out_without_changing_parameters() {
     f.time += 1.0;
     f.frame(vec![]);
 
-    let centers = [65.0, 175.0, 285.0].map(|x| Pos2::new(x, 465.0));
+    let centers = [55.0, 165.0, 385.0].map(|x| Pos2::new(x, 465.0));
     let before = centers.map(|center| f.knob_position(center));
     let global = f.knob_position(Pos2::new(65.0, 642.0));
 

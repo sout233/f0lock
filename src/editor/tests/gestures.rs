@@ -4,7 +4,7 @@ use super::*;
 #[cfg(target_os = "windows")]
 fn primary_knob_press_hides_the_cursor_until_release() {
     let mut f = Fixture::new();
-    let center = Pos2::new(65.0, 465.0);
+    let center = Pos2::new(55.0, 465.0);
     f.frame(vec![egui::Event::PointerMoved(center)]);
     assert_eq!(f.cursor_icon, egui::CursorIcon::Grab);
 
@@ -16,7 +16,7 @@ fn primary_knob_press_hides_the_cursor_until_release() {
     }]);
     assert_eq!(f.cursor_icon, egui::CursorIcon::None);
 
-    for position in [Pos2::new(285.0, 465.0), Pos2::new(0.0, 0.0)] {
+    for position in [Pos2::new(385.0, 465.0), Pos2::new(0.0, 0.0)] {
         f.frame(vec![egui::Event::PointerMoved(position)]);
         assert_eq!(f.cursor_icon, egui::CursorIcon::None);
     }
@@ -68,7 +68,7 @@ fn drag_gain(fine: bool) -> f32 {
         ..Default::default()
     };
 
-    let center = Pos2::new(65.0, 465.0);
+    let center = Pos2::new(55.0, 465.0);
 
     input_frame(&ctx, &mut editor, vec![], modifiers);
 
@@ -153,7 +153,7 @@ fn control_click_resets_knob_through_host_gesture() {
         ..Default::default()
     };
 
-    let pos = Pos2::new(65.0, 465.0);
+    let pos = Pos2::new(55.0, 465.0);
 
     input_frame(&ctx, &mut editor, vec![], modifiers);
 
