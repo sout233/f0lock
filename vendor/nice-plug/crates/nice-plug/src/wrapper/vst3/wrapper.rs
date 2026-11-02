@@ -69,6 +69,10 @@ pub struct Wrapper<P: Vst3Plugin> {
     inner: Arc<WrapperInner<P>>,
 }
 
+#[cfg(all(test, feature = "editor"))]
+#[path = "tests/parameters.rs"]
+mod parameter_tests;
+
 impl<P: Vst3Plugin> Class for Wrapper<P> {
     type Interfaces = (
         IComponent,
@@ -761,12 +765,24 @@ impl<P: Vst3Plugin> IEditControllerTrait for Wrapper<P> {
 
     unsafe fn getParamNormalized(&self, id: ParamID) -> ParamValue {
         match self.inner.param_by_hash.get(&id) {
-            Some(param_ptr) => unsafe { param_ptr.modulated_normalized_value() as f64 },
+            Some(param_ptr) => self.inner.pending_controller_values[&id]
+                .load()
+                .map(f32::from_bits)
+                .unwrap_or_else(|| unsafe { param_ptr.modulated_normalized_value() }) as f64,
             _ => 0.5,
         }
     }
 
     unsafe fn setParamNormalized(&self, id: ParamID, value: ParamValue) -> tresult {
+        let normalized = value as f32;
+        if !normalized.is_finite() {
+            return kInvalidArgument;
+        }
+
+        if let Some(pending) = self.inner.pending_controller_values.get(&id) {
+            pending.store(Some(normalized.to_bits()));
+        }
+
         // If the plugin is currently processing audio, then this parameter change will also be sent
         // to the process function
         if self.inner.is_processing.load(Ordering::SeqCst) {

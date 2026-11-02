@@ -84,6 +84,9 @@
 
 pub use nice_plug_core::*;
 
+#[cfg(test)]
+extern crate self as nice_plug;
+
 /// Everything you'll need to use nice-plug. Import this with `use nice_plug::prelude::*;`.
 pub mod prelude;
 pub mod wrapper;

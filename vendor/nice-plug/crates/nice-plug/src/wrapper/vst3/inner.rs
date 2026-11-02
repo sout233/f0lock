@@ -158,6 +158,9 @@ pub(crate) struct WrapperInner<P: Vst3Plugin> {
     /// parameters belonging to the plugin. These addresses will remain stable as long as the
     /// `params` object does not get deallocated.
     pub param_by_hash: HashMap<u32, ParamPtr>,
+    /// Controller edits awaiting the audio callback. Store float bits to allow atomic acknowledgement.
+    /// A host may query getParamNormalized() from endEdit() before audio has consumed the edit.
+    pub pending_controller_values: HashMap<u32, AtomicCell<Option<u32>>>,
     /// Mappings from parameter hashes to string parameter IDs. Used for notifying the plugin's
     /// editor about parameter changes.
     pub param_id_by_hash: HashMap<u32, String>,
@@ -299,6 +302,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
             .iter()
             .map(|(_, hash, _, _)| *hash)
             .collect();
+        let pending_controller_values = param_id_hashes_ptrs_groups
+            .iter()
+            .map(|(_, hash, _, _)| (*hash, AtomicCell::new(None)))
+            .collect();
         let param_by_hash = param_id_hashes_ptrs_groups
             .iter()
             .map(|(_, hash, ptr, _)| (*hash, *ptr))
@@ -376,6 +383,7 @@ impl<P: Vst3Plugin> WrapperInner<P> {
 
             param_hashes,
             param_by_hash,
+            pending_controller_values,
             param_id_by_hash,
             param_units,
             param_id_to_hash,
@@ -566,6 +574,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                     }
                 }
 
+                // An older in-flight audio update must not acknowledge a newer controller edit.
+                let _ = self.pending_controller_values[&hash]
+                    .compare_exchange(Some(normalized_value.to_bits()), None);
+
                 kResultOk
             }
             _ => kInvalidArgument,
@@ -680,6 +692,10 @@ impl<P: Vst3Plugin> WrapperInner<P> {
                 "Deserializing plugin state from a state object failed"
             );
             return false;
+        }
+
+        for pending in self.pending_controller_values.values() {
+            pending.store(None);
         }
 
         #[cfg(feature = "editor")]

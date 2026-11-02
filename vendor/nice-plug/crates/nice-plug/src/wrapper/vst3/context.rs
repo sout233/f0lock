@@ -416,6 +416,8 @@ impl<P: Vst3Plugin + Send> GuiContextInner for WrapperGuiContext<P> {
         match &*inner.component_handler.borrow() {
             Some(handler) => match inner.param_ptr_to_hash.get(&param) {
                 Some(hash) => {
+                    // Publish the controller value before notifying a host that may read it back.
+                    inner.pending_controller_values[hash].store(Some(normalized.to_bits()));
                     // Only update the parameters manually if the host is not processing audio. If
                     // the plugin is currently processing audio, the host will pass this change back
                     // to the plugin in the audio callback. This also prevents the values from
