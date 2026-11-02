@@ -1,4 +1,4 @@
-use super::{MAX_HZ, Target, candidates::Observations};
+use super::{Target, candidates::Observations};
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex32};
 use std::sync::Arc;
 
@@ -15,6 +15,7 @@ struct Peak {
 /// the complete mixed waveform to have a single repeating period.
 pub(super) struct MelodyEvidence<const BINS: usize> {
     minimum: f32,
+    maximum: f32,
     fft: Arc<dyn RealToComplex<f32>>,
     input: Vec<f32>,
     output: Vec<Complex32>,
@@ -31,12 +32,13 @@ pub(super) struct MelodyEvidence<const BINS: usize> {
 }
 
 impl<const BINS: usize> MelodyEvidence<BINS> {
-    pub fn new(size: usize, minimum: f32) -> Self {
+    pub fn new(size: usize, minimum: f32, maximum: f32) -> Self {
         let fft = RealFftPlanner::new().plan_fft_forward(size * 4);
         let bins = size * 2 + 1;
 
         Self {
             minimum,
+            maximum,
             input: fft.make_input_vec(),
             output: fft.make_output_vec(),
             scratch: fft.make_scratch_vec(),
@@ -48,7 +50,7 @@ impl<const BINS: usize> MelodyEvidence<BINS> {
             prefix: vec![0.0; bins + 1],
             // At most one local maximum per two FFT bins.
             peaks: Vec::with_capacity(bins.div_ceil(2)),
-            grid: std::array::from_fn(|i| (minimum * 2.0_f32.powf(i as f32 / 120.0)).min(MAX_HZ)),
+            grid: std::array::from_fn(|i| (minimum * 2.0_f32.powf(i as f32 / 120.0)).min(maximum)),
             weights: std::array::from_fn(|i| 1.0 / ((i + 1) as f32).sqrt()),
             salience: [0.0; BINS],
             frequency: [0.0; BINS],
@@ -163,8 +165,9 @@ impl<const BINS: usize> MelodyEvidence<BINS> {
 
             if self.salience[i] > 0.0 {
                 // Constrained refinement includes both search endpoints. A
-                // tiny interpolation error must not discard a 2000 Hz peak.
-                self.frequency[i] = (weighted_hz / self.salience[i]).clamp(self.minimum, MAX_HZ);
+                // tiny interpolation error must not discard an endpoint peak.
+                self.frequency[i] =
+                    (weighted_hz / self.salience[i]).clamp(self.minimum, self.maximum);
                 self.clarity[i] = 1.0 - (-evidence).exp();
             }
         }

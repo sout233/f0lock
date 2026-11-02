@@ -237,9 +237,9 @@ impl F0Editor {
                             }
                         });
                 });
-                if params.detection_range.value() == DetectionRange::Low {
+                if params.detection_range.value() != DetectionRange::Standard {
                     ui.label(egui::RichText::new(
-                        "Low range responds more slowly and increases minimum lookahead latency."
+                        "Low-frequency analysis responds more slowly and increases minimum lookahead latency."
                     ).size(11.0).color(MUTED));
                 }
                 });

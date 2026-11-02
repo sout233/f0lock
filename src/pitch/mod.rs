@@ -17,6 +17,8 @@ use tracker::Tracker;
 
 pub const MIN_HZ: f32 = 50.0;
 pub const EXTENDED_MIN_HZ: f32 = 25.0;
+pub const BASS_MIN_HZ: f32 = 20.0;
+pub const BASS_MAX_HZ: f32 = 300.0;
 pub const MAX_HZ: f32 = 2000.0;
 const PERIODIC_MAX_HZ: f32 = 1000.0;
 const PERIODIC_BINS: usize = 520;
@@ -24,6 +26,21 @@ const PERIODIC_BINS: usize = 520;
 const BINS: usize = 640;
 const STATES: usize = BINS * 2;
 pub const LOOKAHEAD: usize = 3;
+
+/// Endpoint bins belong to the ten-cent pitch grid. Keep their interpolated
+/// frequencies inside the requested bounds without changing evidence or clarity.
+pub(crate) fn bounded_frequency(hz: f32, minimum: f32, maximum: f32) -> Option<f32> {
+    if (minimum..=maximum).contains(&hz) {
+        return Some(hz);
+    }
+
+    let bin = (120.0 * (hz / minimum).log2()).round();
+    let last_bin = (120.0 * (maximum / minimum).log2()).round();
+
+    (0.0..=last_bin)
+        .contains(&bin)
+        .then(|| hz.clamp(minimum, maximum))
+}
 
 #[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum DetectionMode {
@@ -82,15 +99,15 @@ pub struct PitchTracking<
 impl<const BINS: usize, const PERIODIC_BINS: usize, const STATES: usize>
     PitchTracking<BINS, PERIODIC_BINS, STATES>
 {
-    pub fn new(rate: f32, window: usize, hop: usize, minimum: f32) -> Self {
+    pub fn new(rate: f32, window: usize, hop: usize, minimum: f32, maximum: f32) -> Self {
         Self {
             decision_ready: false,
             mode: DetectionMode::default(),
             target: Target::default(),
             yin: YinDetector::new(window, window / 2).expect("Invalid pYIN window"),
             evidence: SpectralEvidence::new(window),
-            melody: melody::MelodyEvidence::new(window, minimum),
-            observations: Observations::new(minimum),
+            melody: melody::MelodyEvidence::new(window, minimum, maximum),
+            observations: Observations::new(minimum, maximum),
             tracker: Tracker::new(hop as f32 / rate),
             melody_tracker: Tracker::new(hop as f32 / rate),
         }

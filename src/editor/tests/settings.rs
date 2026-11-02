@@ -23,6 +23,17 @@ fn audio_settings_switches_detection_range_through_host_gestures() {
     f.time += 1.0;
     f.host.events.lock().unwrap().clear();
     f.click_text(DetectionRange::Low.label());
+    f.click_text(DetectionRange::Bass.label());
+    f.frame(vec![]);
+    assert_eq!(
+        f.editor.params.detection_range.value(),
+        DetectionRange::Bass
+    );
+    assert_eq!(*f.host.events.lock().unwrap(), vec!["begin", "set", "end"]);
+
+    f.time += 1.0;
+    f.host.events.lock().unwrap().clear();
+    f.click_text(DetectionRange::Bass.label());
     f.click_text(DetectionRange::Standard.label());
     assert_eq!(
         f.editor.params.detection_range.value(),

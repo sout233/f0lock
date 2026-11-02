@@ -1,4 +1,4 @@
-use super::{EXTENDED_MIN_HZ, MAX_HZ, candidates::Observations};
+use super::{BASS_MIN_HZ, MAX_HZ, candidates::Observations};
 use nice_plug::prelude::*;
 
 #[derive(Enum, Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -57,12 +57,12 @@ impl Target {
 
     pub fn bounds(self) -> (f32, f32) {
         match self.mode {
-            TargetMode::Auto => (EXTENDED_MIN_HZ, MAX_HZ),
+            TargetMode::Auto => (BASS_MIN_HZ, MAX_HZ),
             TargetMode::Range => (self.minimum, self.maximum),
             TargetMode::Reference => {
                 let ratio = 2.0_f32.powf(self.tolerance / 12.0);
                 (
-                    (self.reference / ratio).max(EXTENDED_MIN_HZ),
+                    (self.reference / ratio).max(BASS_MIN_HZ),
                     (self.reference * ratio).min(MAX_HZ),
                 )
             }

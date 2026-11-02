@@ -5,7 +5,7 @@ use crate::{
     lookahead::LookaheadTime,
     midi::{MidiMode, PitchSource},
     mode::OperatingMode,
-    pitch::{DetectionMode, DetectionRange, EXTENDED_MIN_HZ, MAX_HZ, Target, TargetMode},
+    pitch::{BASS_MIN_HZ, DetectionMode, DetectionRange, MAX_HZ, Target, TargetMode},
 };
 use nice_plug::prelude::*;
 use std::sync::atomic::AtomicU32;
@@ -339,7 +339,7 @@ fn target_frequency_param(name: &str, default: f32) -> FloatParam {
         name,
         default,
         FloatRange::Skewed {
-            min: EXTENDED_MIN_HZ,
+            min: BASS_MIN_HZ,
             max: MAX_HZ,
             factor: FloatRange::skew_factor(-1.0),
         },

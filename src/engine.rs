@@ -91,7 +91,7 @@ impl Engine {
         let lookahead = Lookahead::with_capacity(
             sample_rate,
             detector.maximum_decision_age_samples(),
-            detector.extended_decision_age_samples(),
+            detector.longest_decision_age_samples(),
         );
 
         Self {

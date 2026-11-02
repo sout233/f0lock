@@ -1,10 +1,14 @@
 use crate::filter::{Coefficients, Svf};
-use crate::pitch::{DetectionMode, DetectionRange, LOOKAHEAD, PitchTracking, Target, TargetMode};
+use crate::pitch::{
+    DetectionMode, DetectionRange, LOOKAHEAD, PitchTracking, Target, TargetMode, bounded_frequency,
+};
 use pitch_estimate::{McLeodDetector, PitchDetector};
 
 pub const WINDOW: usize = 1024;
 // Half the window covers a 25 Hz period even at decimated rates near 24 kHz.
 pub const EXTENDED_WINDOW: usize = 2048;
+// At ~4 kHz this covers ~256 ms while retaining harmonics above the 300 Hz pitch ceiling.
+pub const BASS_WINDOW: usize = 1024;
 pub const HOP: usize = 128;
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -21,6 +25,8 @@ struct DetectorCore<
     const STATES: usize,
 > {
     minimum: f32,
+    maximum: f32,
+    hop_size: usize,
     pub mode: DetectionMode,
     pub target: Target,
     tracking: PitchTracking<BINS, PERIODIC_BINS, STATES>,
@@ -46,8 +52,14 @@ struct DetectorCore<
 impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const STATES: usize>
     DetectorCore<WINDOW, BINS, PERIODIC_BINS, STATES>
 {
-    fn new(sample_rate: f32, minimum: f32) -> Self {
-        let decimation = (sample_rate / 12000.0).floor().max(1.0) as usize;
+    fn new(sample_rate: f32, range: DetectionRange) -> Self {
+        let minimum = range.minimum();
+        let maximum = range.maximum();
+        let (target_rate, hop_size) = match range {
+            DetectionRange::Bass => (4000.0, 64),
+            DetectionRange::Standard | DetectionRange::Low => (12000.0, HOP),
+        };
+        let decimation = (sample_rate / target_rate).floor().max(1.0) as usize;
         let rate = sample_rate / decimation as f32;
 
         let mpm = McLeodDetector::new(WINDOW, (rate / minimum * 1.6).ceil() as usize)
@@ -57,9 +69,11 @@ impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const S
 
         Self {
             minimum,
+            maximum,
+            hop_size,
             mode: DetectionMode::default(),
             target: Target::default(),
-            tracking: PitchTracking::new(rate, WINDOW, HOP, minimum),
+            tracking: PitchTracking::new(rate, WINDOW, hop_size, minimum, maximum),
             rate,
             decimation,
             phase: 0,
@@ -100,13 +114,13 @@ impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const S
     }
 
     pub fn maximum_decision_age_samples(&self) -> usize {
-        (WINDOW + LOOKAHEAD * HOP) * self.decimation - 1
+        (WINDOW + LOOKAHEAD * self.hop_size) * self.decimation - 1
     }
 
     /// Start and center ages of the returned analysis window. Delayed
     /// decoders describe a window three hops behind the newest one.
     pub fn decision_ages(&self) -> Option<(usize, usize)> {
-        let age = (WINDOW + self.decision_lag * HOP) * self.decimation - 1;
+        let age = (WINDOW + self.decision_lag * self.hop_size) * self.decimation - 1;
         (self.decision_ready && self.samples_seen > age as u64)
             .then_some((age, age - WINDOW * self.decimation / 2))
     }
@@ -123,12 +137,14 @@ impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const S
 
         self.samples_seen += 1;
 
-        // Periodicity modes retain their 1 kHz path; harmonic salience uses
-        // wider anti-alias filtering. Independent channels avoid cancellation.
+        // Bass always uses the steep anti-alias path before its deeper decimation.
+        // Other periodicity profiles retain their 1 kHz path. Channels stay independent.
         let mut filtered = [0.0; 2];
 
         for ch in 0..2 {
-            if self.mode == DetectionMode::SpectralMelody {
+            if self.mode == DetectionMode::SpectralMelody
+                || self.maximum == DetectionRange::Bass.maximum()
+            {
                 let mut value = samples[ch];
 
                 for (filter, coefficients) in
@@ -160,7 +176,7 @@ impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const S
         self.filled = (self.filled + 1).min(WINDOW);
         self.hop += 1;
 
-        if self.hop < HOP {
+        if self.hop < self.hop_size {
             return false;
         }
 
@@ -221,9 +237,13 @@ impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const S
         match self.mpm.detect(&self.frame, self.rate.round() as u32) {
             Some(pitch) => {
                 let hz = pitch.frequency * self.rate / self.rate.round();
-                let valid = pitch.clarity >= threshold && (self.minimum..=1000.0).contains(&hz);
+                let hz = bounded_frequency(hz, self.minimum, self.maximum.min(1000.0));
                 Estimate {
-                    frequency: if valid { hz } else { 0.0 },
+                    frequency: if pitch.clarity >= threshold {
+                        hz.unwrap_or(0.0)
+                    } else {
+                        0.0
+                    },
                     clarity: pitch.clarity,
                     rms,
                 }
@@ -236,7 +256,7 @@ impl<const WINDOW: usize, const BINS: usize, const PERIODIC_BINS: usize, const S
     }
 }
 
-/// Both profiles are prepared off the audio thread; only the selected one runs.
+/// All profiles are prepared off the audio thread; only the selected one runs.
 pub struct Detector {
     pub mode: DetectionMode,
     pub target: Target,
@@ -244,6 +264,7 @@ pub struct Detector {
     range: DetectionRange,
     standard: Box<DetectorCore<WINDOW, 640, 520, 1280>>,
     extended: Box<DetectorCore<EXTENDED_WINDOW, 760, 640, 1520>>,
+    bass: Box<DetectorCore<BASS_WINDOW, 470, 470, 940>>,
 }
 
 macro_rules! dispatch_detector {
@@ -251,16 +272,14 @@ macro_rules! dispatch_detector {
         match $self.range {
             DetectionRange::Standard => $self.standard.$method($($arg),*),
             DetectionRange::Low => $self.extended.$method($($arg),*),
+            DetectionRange::Bass => $self.bass.$method($($arg),*),
         }
     };
 }
 
 impl Detector {
     pub fn new(sample_rate: f32) -> Self {
-        let standard = Box::new(DetectorCore::new(
-            sample_rate,
-            DetectionRange::Standard.minimum(),
-        ));
+        let standard = Box::new(DetectorCore::new(sample_rate, DetectionRange::Standard));
         let rate = standard.rate;
         Self {
             mode: DetectionMode::default(),
@@ -268,10 +287,8 @@ impl Detector {
             rate,
             range: DetectionRange::default(),
             standard,
-            extended: Box::new(DetectorCore::new(
-                sample_rate,
-                DetectionRange::Low.minimum(),
-            )),
+            extended: Box::new(DetectorCore::new(sample_rate, DetectionRange::Low)),
+            bass: Box::new(DetectorCore::new(sample_rate, DetectionRange::Bass)),
         }
     }
 
@@ -280,6 +297,11 @@ impl Detector {
             return false;
         }
         self.range = range;
+        self.rate = match range {
+            DetectionRange::Standard => self.standard.rate,
+            DetectionRange::Low => self.extended.rate,
+            DetectionRange::Bass => self.bass.rate,
+        };
         self.reset();
         true
     }
@@ -288,11 +310,15 @@ impl Detector {
         match self.range {
             DetectionRange::Standard => WINDOW,
             DetectionRange::Low => EXTENDED_WINDOW,
+            DetectionRange::Bass => BASS_WINDOW,
         }
     }
 
-    pub fn extended_decision_age_samples(&self) -> usize {
-        self.extended.maximum_decision_age_samples()
+    pub fn longest_decision_age_samples(&self) -> usize {
+        self.standard
+            .maximum_decision_age_samples()
+            .max(self.extended.maximum_decision_age_samples())
+            .max(self.bass.maximum_decision_age_samples())
     }
 
     pub fn reset(&mut self) {
@@ -315,6 +341,7 @@ impl Detector {
         match self.range {
             DetectionRange::Standard => self.standard.mode = self.mode,
             DetectionRange::Low => self.extended.mode = self.mode,
+            DetectionRange::Bass => self.bass.mode = self.mode,
         }
         dispatch_detector!(self, push(samples))
     }
@@ -324,6 +351,7 @@ impl Detector {
         match self.range {
             DetectionRange::Standard => self.standard.target = target,
             DetectionRange::Low => self.extended.target = target,
+            DetectionRange::Bass => self.bass.target = target,
         }
         dispatch_detector!(self, analyze(gate_db, threshold))
     }

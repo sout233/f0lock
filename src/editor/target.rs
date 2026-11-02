@@ -1,5 +1,5 @@
 use super::*;
-use crate::pitch::{MAX_HZ, TargetMode};
+use crate::pitch::TargetMode;
 
 const TARGET_COLOR: Color32 = Color32::from_rgb(95, 158, 184);
 
@@ -28,13 +28,15 @@ impl F0Editor {
         let setter = gui.param_setter();
         let target = self.params.target();
         let min_hz = self.params.detection_range.value().minimum();
+        let detection_max_hz = self.params.detection_range.value().maximum();
         let (minimum, maximum) = target.bounds();
         let minimum = minimum.max(min_hz);
+        let maximum = maximum.min(detection_max_hz);
         let x = |hz: f32| plot.left() + (hz / 20.0).ln() / (max_hz / 20.0).ln() * plot.width();
         let hz = |x: f32| 20.0 * (max_hz / 20.0).powf((x - plot.left()) / plot.width());
         let p = ui.painter_at(plot);
 
-        if target.mode == TargetMode::Range && minimum > maximum {
+        if target.mode != TargetMode::Auto && minimum > maximum {
             p.text(
                 plot.right_top() + Vec2::new(-6.0, 34.0),
                 egui::Align2::RIGHT_TOP,
@@ -79,7 +81,7 @@ impl F0Editor {
                     let pointer = response
                         .interact_pointer_pos()
                         .expect("Target drag without pointer");
-                    let frequency = hz(pointer.x).clamp(min_hz, MAX_HZ);
+                    let frequency = hz(pointer.x).clamp(min_hz, detection_max_hz);
                     let value = if target.mode == TargetMode::Reference {
                         (12.0 * (frequency / target.reference).log2())
                             .abs()
@@ -142,7 +144,7 @@ impl F0Editor {
                         .expect("Reference drag without pointer");
                     setter.set_parameter(
                         &self.params.active().target_reference,
-                        hz(pointer.x).clamp(min_hz, MAX_HZ),
+                        hz(pointer.x).clamp(min_hz, detection_max_hz),
                     );
                 }
 
@@ -210,7 +212,7 @@ impl F0Editor {
                                 for (param, label) in fields {
                                     ui.label(label);
                                     let mut bounds = if param.unit() == " Hz" {
-                                        min_hz..=MAX_HZ
+                                        min_hz..=detection_max_hz
                                     } else {
                                         param.preview_plain(0.0)..=param.preview_plain(1.0)
                                     };
@@ -218,9 +220,14 @@ impl F0Editor {
                                     if mode == TargetMode::Range {
                                         let bank = self.params.active();
                                         bounds = if label == "Minimum" {
-                                            min_hz..=bank.target_max.value().max(min_hz)
+                                            min_hz
+                                                ..=bank
+                                                    .target_max
+                                                    .value()
+                                                    .clamp(min_hz, detection_max_hz)
                                         } else {
-                                            bank.target_min.value().max(min_hz)..=MAX_HZ
+                                            bank.target_min.value().clamp(min_hz, detection_max_hz)
+                                                ..=detection_max_hz
                                         };
                                     }
 

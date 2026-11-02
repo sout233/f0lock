@@ -1,10 +1,11 @@
-use super::{MAX_HZ, MIN_HZ, PERIODIC_MAX_HZ, Target, TargetMode};
+use super::{MAX_HZ, MIN_HZ, PERIODIC_MAX_HZ, Target, bounded_frequency};
 use pitch_estimate::McLeodDetector;
 use realfft::{RealFftPlanner, RealToComplex, num_complex::Complex32};
 use std::sync::Arc;
 
 pub(super) struct Observations<const BINS: usize = { crate::pitch::BINS }> {
     minimum: f32,
+    maximum: f32,
     pub probability: [f32; BINS],
     pub frequency: [f32; BINS],
     pub clarity: [f32; BINS],
@@ -12,14 +13,15 @@ pub(super) struct Observations<const BINS: usize = { crate::pitch::BINS }> {
 
 impl Default for Observations {
     fn default() -> Self {
-        Self::new(MIN_HZ)
+        Self::new(MIN_HZ, MAX_HZ)
     }
 }
 
 impl<const BINS: usize> Observations<BINS> {
-    pub fn new(minimum: f32) -> Self {
+    pub fn new(minimum: f32, maximum: f32) -> Self {
         Self {
             minimum,
+            maximum,
             probability: [0.0; BINS],
             frequency: [0.0; BINS],
             clarity: [0.0; BINS],
@@ -35,9 +37,9 @@ impl<const BINS: usize> Observations<BINS> {
     }
 
     pub fn add(&mut self, frequency: f32, clarity: f32, probability: f32) {
-        if !(self.minimum..=MAX_HZ).contains(&frequency) {
+        let Some(frequency) = bounded_frequency(frequency, self.minimum, self.maximum) else {
             return;
-        }
+        };
 
         let bin = (120.0 * (frequency / self.minimum).log2()).round() as usize;
         let total = self.probability[bin] + probability;
@@ -124,8 +126,11 @@ pub(super) fn mpm_observations<const BINS: usize>(
 
     mpm.candidates(frame, rate.round() as u32, |pitch| {
         let hz = pitch.frequency * rate / rate.round();
+        let Some(hz) = bounded_frequency(hz, out.minimum, out.maximum.min(PERIODIC_MAX_HZ)) else {
+            return;
+        };
 
-        if (out.minimum..=PERIODIC_MAX_HZ).contains(&hz) && target.allows(hz) {
+        if target.allows(hz) {
             voiced = voiced.max(pitch.clarity);
             let weight = (24.0 * (pitch.clarity - 1.0)).exp() * evidence.support(hz, rate);
             out.add(hz, pitch.clarity, weight);
@@ -156,9 +161,12 @@ pub(super) fn pyin_observations<const BINS: usize>(
     for i in 2..curve.len() - 1 {
         if curve[i] < curve[i - 1]
             && curve[i] <= curve[i + 1]
-            && (target.mode == TargetMode::Auto
-                || ((out.minimum..=PERIODIC_MAX_HZ).contains(&(rate / refine(difference, i).0))
-                    && target.allows(rate / refine(difference, i).0)))
+            && bounded_frequency(
+                rate / refine(difference, i).0,
+                out.minimum,
+                out.maximum.min(PERIODIC_MAX_HZ),
+            )
+            .is_some_and(|hz| target.allows(hz))
             && minimum.is_none_or(|previous| curve[i] < curve[previous])
         {
             minimum = Some(i);
@@ -176,10 +184,12 @@ pub(super) fn pyin_observations<const BINS: usize>(
             if curve[i] < threshold
                 && curve[i] < curve[i - 1]
                 && curve[i] <= curve[i + 1]
-                && (target.mode == TargetMode::Auto
-                    || ((out.minimum..=PERIODIC_MAX_HZ)
-                        .contains(&(rate / refine(difference, i).0))
-                        && target.allows(rate / refine(difference, i).0)))
+                && bounded_frequency(
+                    rate / refine(difference, i).0,
+                    out.minimum,
+                    out.maximum.min(PERIODIC_MAX_HZ),
+                )
+                .is_some_and(|hz| target.allows(hz))
             {
                 selected = i;
                 found = true;
@@ -197,7 +207,7 @@ pub(super) fn pyin_observations<const BINS: usize>(
         let (_, depth) = refine(curve, selected);
         let hz = rate / lag;
 
-        if (out.minimum..=PERIODIC_MAX_HZ).contains(&hz) {
+        if let Some(hz) = bounded_frequency(hz, out.minimum, out.maximum.min(PERIODIC_MAX_HZ)) {
             out.add(hz, (1.0 - depth).clamp(0.0, 1.0), mass);
         }
     }

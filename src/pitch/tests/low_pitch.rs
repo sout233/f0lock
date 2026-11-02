@@ -45,7 +45,7 @@ fn all_backends_track_sub_bass_across_sample_rates_and_target_modes() {
 
 #[test]
 fn pitch_grid_covers_both_frequency_limits() {
-    let mut observations = candidates::Observations::<760>::new(EXTENDED_MIN_HZ);
+    let mut observations = candidates::Observations::<760>::new(EXTENDED_MIN_HZ, MAX_HZ);
     observations.add(EXTENDED_MIN_HZ, 1.0, 1.0);
     observations.add(MAX_HZ, 1.0, 1.0);
     assert_eq!(observations.frequency[0], EXTENDED_MIN_HZ);
