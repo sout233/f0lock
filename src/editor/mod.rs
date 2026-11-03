@@ -9,6 +9,7 @@ use std::{sync::Arc, time::Duration};
 
 mod controls;
 mod credits;
+mod dynamic_range;
 mod knob;
 mod point_drag;
 mod point_tabs;
@@ -33,6 +34,8 @@ pub struct F0Editor {
     selected: Option<usize>,
     context_point: Option<usize>,
     point_drag: Option<point_drag::PointDrag>,
+    /// Dynamic range grip being dragged on the spectrum, if any.
+    range_drag: Option<dynamic_range::RangeDrag>,
     notice: Option<Notice>,
     about_open: bool,
     about_credits: bool,
@@ -99,6 +102,7 @@ impl F0Editor {
             selected,
             context_point: None,
             point_drag: None,
+            range_drag: None,
             notice: None,
             about_open: false,
             about_credits: false,
@@ -120,6 +124,7 @@ impl F0Editor {
         let mode = self.params.mode.value();
         if mode != self.shown_mode {
             self.finish_point_drag();
+            self.finish_range_drag();
             self.mode_selection[self.shown_mode as usize] = self.selected;
             self.selected = self.mode_selection[mode as usize];
             self.shown_mode = mode;
@@ -255,6 +260,7 @@ impl NiceEguiApp for F0Editor {
 
     fn editor_closed(&mut self) {
         self.finish_point_drag();
+        self.finish_range_drag();
         self.gui = None;
         self.context_point = None;
         self.about_open = false;

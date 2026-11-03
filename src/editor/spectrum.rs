@@ -7,12 +7,12 @@ use crate::{
 };
 use realfft::num_complex::Complex32;
 
-struct Plot {
-    rect: Rect,
-    max_hz: f32,
+pub(super) struct Plot {
+    pub(super) rect: Rect,
+    pub(super) max_hz: f32,
 }
 impl Plot {
-    fn new(outer: Rect, rate: f32) -> Self {
+    pub(super) fn new(outer: Rect, rate: f32) -> Self {
         Self {
             rect: Rect::from_min_max(
                 outer.min + Vec2::new(37.0, 17.0),
@@ -26,11 +26,11 @@ impl Plot {
         }
     }
 
-    fn x(&self, hz: f32) -> f32 {
+    pub(super) fn x(&self, hz: f32) -> f32 {
         self.rect.left() + (hz / 20.0).ln() / (self.max_hz / 20.0).ln() * self.rect.width()
     }
 
-    fn y(&self, db: f32) -> f32 {
+    pub(super) fn y(&self, db: f32) -> f32 {
         self.rect.center().y - db.clamp(-24.0, 24.0) / 48.0 * self.rect.height()
     }
 }
@@ -51,6 +51,7 @@ impl F0Editor {
 
         if self.params.bypass.value() {
             self.finish_point_drag();
+            self.finish_range_drag();
             self.context_point = None;
             p.text(
                 plot.rect.center(),
@@ -96,6 +97,8 @@ impl F0Editor {
         }
 
         let bands = self.telemetry.bands();
+
+        self.dynamic_range_fills(&p, &plot, v[7], layout_f0);
 
         if v[7] > 0.0 {
             draw_response(&p, &plot, &bands, v[7], self.accent());
@@ -190,6 +193,7 @@ impl F0Editor {
 
         self.target_controls(ui, plot.rect, plot.max_hz);
         self.drag_spectrum_points(ui, &markers, plot.rect, plot.max_hz, layout_f0);
+        self.dynamic_range_handles(ui, &plot, layout_f0);
 
         let mut readout = if v[0] > 0.0 {
             format!("{:.1} Hz   {:.0}%", v[0], v[1] * 100.0)

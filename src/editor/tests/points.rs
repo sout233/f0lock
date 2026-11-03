@@ -630,3 +630,81 @@ fn notifications_popup_at_top_left_and_expire() {
 
     assert!(f.editor.notice.is_none());
 }
+
+/// Press on `from`, move one pixel so the drag starts, turn the wheel, release.
+fn drag_with_wheel(f: &mut Fixture, from: Pos2, notches: f32) {
+    let moved = from + Vec2::new(1.0, 0.0);
+
+    f.frame(vec![egui::Event::PointerMoved(from)]);
+    f.frame(vec![
+        egui::Event::PointerMoved(from),
+        egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Default::default(),
+        },
+    ]);
+    f.frame(vec![egui::Event::PointerMoved(moved)]);
+    f.frame(vec![egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: Vec2::new(0.0, notches),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+        modifiers: Default::default(),
+    }]);
+    f.frame(vec![egui::Event::PointerButton {
+        pos: moved,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: Default::default(),
+    }]);
+    f.frame(vec![]);
+}
+
+#[test]
+fn the_wheel_while_dragging_a_point_sets_its_q() {
+    let mut f = Fixture::new();
+    f.add();
+
+    let from = f.handle(1);
+    assert!((f.editor.params.band(1).q.value() - 3.0).abs() < 0.001);
+
+    f.host.events.lock().unwrap().clear();
+    drag_with_wheel(&mut f, from, 2.0);
+
+    let q = f.editor.params.band(1).q.value();
+    let expected = 3.0 * 1.15_f32.powi(2);
+    assert!(
+        (q - expected).abs() < 0.01,
+        "q is {q} instead of {expected} after two notches"
+    );
+
+    let events = f.host.events.lock().unwrap();
+    assert!(events.contains(&"set"), "the wheel must reach the host");
+
+    // The wheel alone must not move the point.
+    assert!(
+        (f.editor.params.band(1).gain.value() - 0.0).abs() < 0.5,
+        "gain moved to {}",
+        f.editor.params.band(1).gain.value()
+    );
+}
+
+#[test]
+fn the_wheel_does_nothing_without_a_drag() {
+    let mut f = Fixture::new();
+    f.add();
+    let before = f.editor.params.band(1).q.value();
+
+    f.frame(vec![egui::Event::PointerMoved(f.handle(1))]);
+    f.frame(vec![egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Line,
+        delta: Vec2::new(0.0, 2.0),
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Wheel,
+        modifiers: Default::default(),
+    }]);
+
+    assert_eq!(f.editor.params.band(1).q.value(), before);
+}

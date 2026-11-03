@@ -1,5 +1,28 @@
 use super::*;
+use crate::filter::CutSlope;
 use crate::mode::OperatingMode;
+
+/// One wheel notch scales Q by this much. Multiplicative rather than additive,
+/// so a notch feels the same at a narrow Q as at a wide one.
+const Q_WHEEL_STEP: f32 = 1.15;
+
+/// Wheel movement in notches, read straight from the events so the smoothing
+/// egui applies to its scroll delta cannot keep editing after the wheel stops.
+pub(super) fn wheel_notches(ui: &egui::Ui) -> f32 {
+    ui.input(|i| {
+        i.events
+            .iter()
+            .filter_map(|event| match event {
+                egui::Event::MouseWheel { unit, delta, .. } => Some(match unit {
+                    egui::MouseWheelUnit::Line => delta.y,
+                    egui::MouseWheelUnit::Point => delta.y / 50.0,
+                    egui::MouseWheelUnit::Page => delta.y * 8.0,
+                }),
+                _ => None,
+            })
+            .sum()
+    })
+}
 
 pub(super) struct PointDrag {
     mode: OperatingMode,
@@ -26,6 +49,34 @@ impl F0Editor {
             if drag.has_gain {
                 setter.end_set_parameter(band.gain);
             }
+        }
+    }
+
+    /// Scale a point's Q by a number of wheel notches, through the parameter's
+    /// own range so the knob and the readout follow.
+    pub(super) fn scroll_q(&self, index: usize, notches: f32) {
+        let Some(gui) = &self.gui else {
+            return;
+        };
+        let band = self.params.band(index);
+
+        // First-order cuts have no Q control, so they keep the wheel too.
+        if !band.exists.value()
+            || (band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6)
+        {
+            return;
+        }
+
+        let target = band.q.unmodulated_plain_value() * Q_WHEEL_STEP.powf(notches);
+        let target = band
+            .q
+            .preview_plain(band.q.preview_normalized(target).clamp(0.0, 1.0));
+
+        if target != band.q.unmodulated_plain_value() {
+            let setter = gui.param_setter();
+            setter.begin_set_parameter(band.q);
+            setter.set_parameter(band.q, target);
+            setter.end_set_parameter(band.q);
         }
     }
 
@@ -132,6 +183,16 @@ impl F0Editor {
 
             if response.drag_stopped_by(egui::PointerButton::Primary) {
                 self.finish_point_drag();
+            }
+        }
+
+        // The wheel edits Q while a point is held, so one drag can place the
+        // point and size its width without letting go.
+        if let Some(index) = self.point_drag.as_ref().map(|drag| drag.index) {
+            let notches = wheel_notches(ui);
+
+            if notches != 0.0 {
+                self.scroll_q(index, notches);
             }
         }
     }

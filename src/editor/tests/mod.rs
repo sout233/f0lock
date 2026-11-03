@@ -8,6 +8,7 @@ use std::sync::Mutex;
 
 mod about;
 mod audition;
+mod dynamic_range;
 mod dynamics;
 mod gestures;
 mod knobs;
