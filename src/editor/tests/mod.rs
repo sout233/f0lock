@@ -15,10 +15,12 @@ mod modes;
 mod native;
 mod points;
 mod preview;
+mod readout;
 mod scale;
 mod settings;
 mod spectrum;
 mod target;
+mod toggle;
 
 #[derive(Default)]
 pub(super) struct RecordingHost {
@@ -84,6 +86,9 @@ impl Fixture {
         telemetry.publish(&engine);
 
         let mut editor = F0Editor::new(Arc::new(F0Params::default()), telemetry);
+        // Most tests exercise the expanded control strip; the expander itself is
+        // covered by `tests::toggle`.
+        editor.q_follow_open = [Some(true); BAND_COUNT];
         let host = Arc::new(RecordingHost::default());
         editor.gui = Some(GuiContext::new(host.clone()));
 
@@ -177,6 +182,15 @@ impl Fixture {
                 )
             });
         self.click(position, egui::PointerButton::Primary);
+    }
+
+    fn text_rect(&self, text: &str) -> Option<egui::Rect> {
+        self.shapes.iter().rev().find_map(|shape| match &shape.shape {
+            egui::Shape::Text(t) if t.galley.job.text == text => {
+                Some(shape.shape.visual_bounding_rect())
+            }
+            _ => None,
+        })
     }
 
     fn add(&mut self) {

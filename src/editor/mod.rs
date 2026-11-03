@@ -40,6 +40,10 @@ pub struct F0Editor {
     shown_mode: crate::mode::OperatingMode,
     mode_selection: [Option<usize>; 2],
     audio_open: bool,
+    /// Whether the Q Follow knob is expanded per point. `None` means "never
+    /// toggled": the knob follows the parameter, so projects already using
+    /// Q Follow open with it visible.
+    q_follow_open: [Option<bool>; BAND_COUNT],
 }
 
 struct Notice {
@@ -93,7 +97,12 @@ impl F0Editor {
             shown_mode,
             mode_selection: [Some(0); 2],
             audio_open: false,
+            q_follow_open: [None; BAND_COUNT],
         }
+    }
+
+    fn q_follow_expanded(&self, index: usize) -> bool {
+        self.q_follow_open[index].unwrap_or(self.params.band(index).q_follow.value() != 0.0)
     }
 
     pub(crate) fn draw(&mut self, ui: &mut egui::Ui) {

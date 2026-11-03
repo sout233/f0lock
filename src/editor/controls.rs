@@ -2,9 +2,19 @@ use super::*;
 use crate::filter::CutSlope;
 
 impl F0Editor {
-    pub(super) fn controls(&self, ui: &mut egui::Ui, canvas: Rect, v: &[f32; 10]) {
+    pub(super) fn controls(&mut self, ui: &mut egui::Ui, canvas: Rect, v: &[f32; 10]) {
         let at = |x, y| canvas.min + Vec2::new(x, y);
         let p = ui.painter_at(canvas);
+
+        // The EQ column divider moves with the strip: 350 px is the original
+        // width (three knobs), 450 px is the widened one that fits the fourth
+        // knob when Q Follow is expanded. Everything in the header row is
+        // pinned to it, so it has to be resolved before anything is painted.
+        let index = self.selected.unwrap_or(0);
+        let expanded = self.q_follow_expanded(index);
+        let divider_x = if expanded { 450.0 } else { 350.0 };
+        let header_x = divider_x + 25.0;
+        let readout_right = divider_x - 10.0;
         gradient_rect(
             &p,
             Rect::from_min_max(at(0.0, 346.0), at(900.0, 551.0)),
@@ -28,7 +38,7 @@ impl F0Editor {
         }
 
         for (x, top, bottom) in [
-            (450.0, 362.0, 542.0),
+            (divider_x, 362.0, 542.0),
             (350.0, 568.0, 692.0),
             (630.0, 568.0, 692.0),
         ] {
@@ -68,7 +78,7 @@ impl F0Editor {
 
         let Some(gui) = &self.gui else { return };
         let setter = gui.param_setter();
-        let band = self.params.band(self.selected.unwrap_or(0));
+        let band = self.params.band(index);
         let selected = self.selected.is_some();
         let by_channel = self.params.pitch_source.value() == crate::midi::PitchSource::Midi
             && self.params.midi_mode.value() == crate::midi::MidiMode::ByChannel;
@@ -79,39 +89,37 @@ impl F0Editor {
             GLOBAL_ACCENT
         };
 
-        // EQ and dynamics stay in fixed positions, independently of enable state.
-        for (param, label, x, y, bipolar, enabled, color) in [
+        // Collapsed keeps the pre-Q-Follow layout and knob size; expanded makes
+        // room for the Q Follow knob and tightens the row to fit it.
+        let eq_radius = if expanded { 27.0 } else { 35.0 * 0.85 };
+        let eq_x: [f32; 4] = if expanded {
+            [55.0, 165.0, 275.0, 385.0]
+        } else {
+            [65.0, 175.0, 285.0, 0.0]
+        };
+        let dyn_x: [f32; 4] = if expanded {
+            [505.0, 615.0, 725.0, 835.0]
+        } else {
+            [420.0, 550.0, 680.0, 810.0]
+        };
+
+        let q_enabled =
+            selected && !(band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6);
+        let mut knobs: Vec<(&FloatParam, &'static str, f32, f32, bool, bool, Color32)> = vec![
             (
                 band.gain,
                 "Gain",
-                55.0,
+                eq_x[0],
                 465.0,
                 true,
                 supported,
                 self.accent(),
             ),
-            (
-                band.q,
-                "Q",
-                165.0,
-                465.0,
-                false,
-                selected && !(band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6),
-                self.accent(),
-            ),
-            (
-                band.q_follow,
-                "Q Follow",
-                275.0,
-                465.0,
-                true,
-                selected && !(band.kind.value().is_cut() && band.slope.value() == CutSlope::Db6),
-                self.accent(),
-            ),
+            (band.q, "Q", eq_x[1], 465.0, false, q_enabled, self.accent()),
             (
                 band.ratio,
                 "F0 Ratio",
-                385.0,
+                if expanded { eq_x[3] } else { eq_x[2] },
                 465.0,
                 false,
                 selected,
@@ -120,7 +128,7 @@ impl F0Editor {
             (
                 &band.dynamics.threshold,
                 "Threshold",
-                505.0,
+                dyn_x[0],
                 465.0,
                 false,
                 supported,
@@ -129,7 +137,7 @@ impl F0Editor {
             (
                 &band.dynamics.range,
                 "Range",
-                615.0,
+                dyn_x[1],
                 465.0,
                 false,
                 supported,
@@ -138,7 +146,7 @@ impl F0Editor {
             (
                 &band.dynamics.attack,
                 "Dyn.Attack",
-                725.0,
+                dyn_x[2],
                 465.0,
                 false,
                 supported,
@@ -147,7 +155,7 @@ impl F0Editor {
             (
                 &band.dynamics.release,
                 "Dyn.Release",
-                835.0,
+                dyn_x[3],
                 465.0,
                 false,
                 supported,
@@ -216,22 +224,83 @@ impl F0Editor {
                 true,
                 GLOBAL_ACCENT,
             ),
-        ] {
+        ];
+
+        if expanded {
+            knobs.insert(
+                2,
+                (
+                    band.q_follow,
+                    "Q Follow",
+                    eq_x[2],
+                    465.0,
+                    true,
+                    q_enabled,
+                    self.accent(),
+                ),
+            );
+        }
+
+        // EQ and dynamics stay in fixed positions, independently of enable state.
+        for (param, label, x, y, bipolar, enabled, color) in knobs {
             let builder = egui::UiBuilder::new()
                 .max_rect(Rect::from_center_size(at(x, y), Vec2::splat(110.0)));
             let builder = if enabled { builder } else { builder.disabled() };
             ui.scope_builder(builder, |ui| {
                 ui.visuals_mut().selection.bg_fill = color.gamma_multiply(0.3);
                 ui.visuals_mut().selection.stroke = Stroke::new(1.0, color);
-                let radius = if y < 551.0 { 27.0 } else { 35.0 * 0.85 };
+                let radius = if y < 551.0 { eq_radius } else { 35.0 * 0.85 };
                 let response = knob::knob(ui, param, &setter, at(x, y), radius, label, bipolar);
                 if label == "Q Follow" {
-                    response.on_hover_text(
-                        "Q at 220 Hz × (pitch / 220 Hz)^Follow. +1 doubles Q per octave; \
-                         −1 halves it. 0 keeps Q fixed. Effective Q stays within 0.3–16.",
-                    );
+                    response.on_hover_text("Q = 220 Hz × (pitch / 220 Hz)^Follow");
                 }
             });
+        }
+
+        // Anchor to Q's outer ring in both layouts, rather than the column gap.
+        let toggle = at(eq_x[1] + 36.0, 422.0);
+        let response = ui
+            .interact(
+                Rect::from_center_size(toggle, Vec2::splat(24.0)),
+                ui.make_persistent_id("q-follow-toggle"),
+                Sense::click(),
+            )
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text(if expanded {
+                "Q Follow: hide the pitch-following Q knob"
+            } else {
+                "Q Follow: show the pitch-following Q knob"
+            });
+        let color = if expanded {
+            self.accent()
+        } else {
+            Color32::from_gray(if response.hovered() { 65 } else { 112 })
+        };
+        if response.hovered() || response.is_pointer_button_down_on() {
+            p.circle_filled(
+                toggle,
+                9.0,
+                color.gamma_multiply(if response.is_pointer_button_down_on() {
+                    0.16
+                } else {
+                    0.08
+                }),
+            );
+        }
+        p.circle_stroke(toggle, 9.0, Stroke::new(1.0, color.gamma_multiply(0.65)));
+        p.line_segment(
+            [toggle - Vec2::new(3.5, 0.0), toggle + Vec2::new(3.5, 0.0)],
+            Stroke::new(1.3, color),
+        );
+        if !expanded {
+            p.line_segment(
+                [toggle - Vec2::new(0.0, 3.5), toggle + Vec2::new(0.0, 3.5)],
+                Stroke::new(1.3, color),
+            );
+        }
+        if response.clicked() {
+            self.q_follow_open[index] = Some(!expanded);
+            ui.ctx().request_repaint();
         }
 
         let infinite_release = &self.params.active().infinite_release;
@@ -384,18 +453,21 @@ impl F0Editor {
         }
 
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(Rect::from_min_max(at(475.0, 362.0), at(595.0, 384.0))),
+            egui::UiBuilder::new().max_rect(Rect::from_min_max(
+                at(header_x, 362.0),
+                at(header_x + 120.0, 384.0),
+            )),
             |ui| {
                 ui.add_enabled_ui(supported, |ui| {
                     let response = ui
                         .interact(
-                            Rect::from_min_max(at(475.0, 362.0), at(595.0, 384.0)),
+                            Rect::from_min_max(at(header_x, 362.0), at(header_x + 120.0, 384.0)),
                             ui.make_persistent_id("dynamics-switch"),
                             Sense::click(),
                         )
                         .on_hover_cursor(egui::CursorIcon::PointingHand);
                     let lit = supported && band.dynamics.enabled.value();
-                    let lamp = at(483.0, 373.0);
+                    let lamp = at(header_x + 8.0, 373.0);
                     let painter = ui.painter();
                     let (glow, core) = knob::light_colors(accent);
 
@@ -418,7 +490,7 @@ impl F0Editor {
                         if lit { core } else { Color32::from_gray(110) },
                     );
                     painter.text(
-                        at(497.0, 373.0),
+                        at(header_x + 22.0, 373.0),
                         egui::Align2::LEFT_CENTER,
                         "Dynamics",
                         FontId::proportional(12.0),
@@ -444,9 +516,11 @@ impl F0Editor {
         );
 
         if selected && v[7] > 0.0 && v[2] > 0.0 {
+            // Right-aligned against the EQ column divider: only the left edge
+            // moves when the digit count changes, so "Hz" stays in place.
             p.text(
-                at(300.0, if by_channel { 397.0 } else { 373.0 }),
-                egui::Align2::CENTER_CENTER,
+                at(readout_right, if by_channel { 397.0 } else { 373.0 }),
+                egui::Align2::RIGHT_CENTER,
                 format!(
                     "{:.1} Hz",
                     (self.point_pitch(self.selected.unwrap(), v[2]) * band.ratio.value())
