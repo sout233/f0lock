@@ -108,9 +108,51 @@ impl Telemetry {
     }
 }
 
+/// Transient audition state shared between the editor and the audio thread.
+/// Neither value is a parameter, so the host never sees them.
+pub(crate) struct Audition {
+    /// Point being auditioned, encoded as index + 1 with zero meaning "off".
+    point: AtomicU32,
+    /// Half width of the audition window in hertz, stored as `f32` bits.
+    half_width: AtomicU32,
+}
+
+impl Default for Audition {
+    fn default() -> Self {
+        Self {
+            point: AtomicU32::new(0),
+            half_width: AtomicU32::new(engine::LISTEN_HALF_WIDTH_DEFAULT.to_bits()),
+        }
+    }
+}
+
+impl Audition {
+    pub(crate) fn point(&self) -> Option<usize> {
+        match self.point.load(Ordering::Relaxed) {
+            0 => None,
+            encoded => Some(encoded as usize - 1),
+        }
+    }
+
+    pub(crate) fn set_point(&self, point: Option<usize>) {
+        let encoded = point.map_or(0, |index| index as u32 + 1);
+        self.point.store(encoded, Ordering::Relaxed);
+    }
+
+    pub(crate) fn half_width(&self) -> f32 {
+        f32::from_bits(self.half_width.load(Ordering::Relaxed))
+    }
+
+    pub(crate) fn set_half_width(&self, hertz: f32) {
+        self.half_width.store(hertz.to_bits(), Ordering::Relaxed);
+    }
+}
+
 pub struct F0Lock {
     params: Arc<F0Params>,
     telemetry: Arc<Telemetry>,
+    /// Audition state, owned by the editor and read at the top of each block.
+    audition: Arc<Audition>,
     editor_state: Arc<EguiEditorState>,
     repaint: RepaintNotifier,
     engine: Engine,
@@ -121,6 +163,7 @@ impl Default for F0Lock {
         Self {
             params: Arc::new(F0Params::default()),
             telemetry: Arc::new(Telemetry::default()),
+            audition: Arc::new(Audition::default()),
             editor_state: EguiEditorState::from_size(LogicalSize::new(900.0, 724.0), 1.0),
             repaint: RepaintNotifier::new(),
             engine: Engine::new(48000.0),
@@ -192,7 +235,11 @@ impl Plugin for F0Lock {
             self.editor_state.clone(),
             self.repaint.clone(),
             editor_settings(),
-            editor::F0Editor::new(self.params.clone(), self.telemetry.clone()),
+            editor::F0Editor::new(
+                self.params.clone(),
+                self.telemetry.clone(),
+                self.audition.clone(),
+            ),
         )
     }
 
@@ -301,6 +348,8 @@ impl Plugin for F0Lock {
                 mix: params.mix.value() * 0.01,
                 output_db: params.output.value(),
                 bypass: self.params.bypass.value(),
+                audition: self.audition.point(),
+                listen_half_width: self.audition.half_width(),
             };
 
             let left = *frame.get_mut(0).expect("Missing input channel");

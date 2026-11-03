@@ -9,7 +9,11 @@ fn editor_renders_real_signal_and_exports_meshes() {
 
     let params = Arc::new(F0Params::default());
 
-    let mut editor = F0Editor::new(params.clone(), telemetry.clone());
+    let mut editor = F0Editor::new(
+        params.clone(),
+        telemetry.clone(),
+        Arc::new(crate::Audition::default()),
+    );
     let host = Arc::new(RecordingHost::default());
     editor.gui = Some(GuiContext::new(host.clone()));
 

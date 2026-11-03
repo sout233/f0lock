@@ -186,6 +186,12 @@ impl Coefficients {
         }
     }
 
+    /// Unity-gain band-pass, used to audition a frequency window.
+    pub fn bandpass(rate: f32, frequency: f32, q: f32) -> Self {
+        let k = 1.0 / q;
+        Self::new((PI * frequency / rate).tan(), k, [0.0, k, 0.0])
+    }
+
     pub fn lowpass(rate: f32, frequency: f32, q: f32) -> Self {
         Self::new((PI * frequency / rate).tan(), 1.0 / q, [0.0, 0.0, 1.0])
     }

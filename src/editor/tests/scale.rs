@@ -31,7 +31,11 @@ fn chosen_ui_scale_survives_editor_recreation_and_project_state_restore() {
     // A new parameter object models loading the saved project into a new instance.
     let params = Arc::new(F0Params::default());
     params.deserialize_fields(&saved);
-    f.editor = F0Editor::new(params, Arc::new(Telemetry::default()));
+    f.editor = F0Editor::new(
+        params,
+        Arc::new(Telemetry::default()),
+        Arc::new(crate::Audition::default()),
+    );
     f.editor.gui = Some(GuiContext::new(f.host.clone()));
     f.ctx = egui::Context::default();
     configure_style(&f.ctx);

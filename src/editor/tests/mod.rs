@@ -7,6 +7,7 @@ use nice_plug::{
 use std::sync::Mutex;
 
 mod about;
+mod audition;
 mod dynamics;
 mod gestures;
 mod knobs;
@@ -62,6 +63,7 @@ impl GuiContextInner for RecordingHost {
 struct Fixture {
     ctx: egui::Context,
     editor: F0Editor,
+    audition: Arc<crate::Audition>,
     host: Arc<RecordingHost>,
     shapes: Vec<egui::epaint::ClippedShape>,
     viewport_commands: Vec<egui::ViewportCommand>,
@@ -85,7 +87,8 @@ impl Fixture {
 
         telemetry.publish(&engine);
 
-        let mut editor = F0Editor::new(Arc::new(F0Params::default()), telemetry);
+        let audition = Arc::new(crate::Audition::default());
+        let mut editor = F0Editor::new(Arc::new(F0Params::default()), telemetry, audition.clone());
         // Most tests exercise the expanded control strip; the expander itself is
         // covered by `tests::toggle`.
         editor.q_follow_open = [Some(true); BAND_COUNT];
@@ -95,6 +98,7 @@ impl Fixture {
         let mut fixture = Self {
             ctx,
             editor,
+            audition,
             host,
             shapes: Vec::new(),
             viewport_commands: Vec::new(),
@@ -184,13 +188,44 @@ impl Fixture {
         self.click(position, egui::PointerButton::Primary);
     }
 
+    /// Auditioned point as the audio thread sees it: `None` when off.
+    fn auditioned(&self) -> Option<usize> {
+        self.audition.point()
+    }
+
+    /// Press, move and release, so the widget sees a drag rather than a click.
+    fn drag(&mut self, from: Pos2, to: Pos2) {
+        self.frame(vec![egui::Event::PointerMoved(from)]);
+        self.frame(vec![
+            egui::Event::PointerMoved(from),
+            egui::Event::PointerButton {
+                pos: from,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            },
+        ]);
+        self.frame(vec![egui::Event::PointerMoved(to)]);
+        self.frame(vec![egui::Event::PointerMoved(to)]);
+        self.frame(vec![egui::Event::PointerButton {
+            pos: to,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Default::default(),
+        }]);
+        self.frame(vec![]);
+    }
+
     fn text_rect(&self, text: &str) -> Option<egui::Rect> {
-        self.shapes.iter().rev().find_map(|shape| match &shape.shape {
-            egui::Shape::Text(t) if t.galley.job.text == text => {
-                Some(shape.shape.visual_bounding_rect())
-            }
-            _ => None,
-        })
+        self.shapes
+            .iter()
+            .rev()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(t) if t.galley.job.text == text => {
+                    Some(shape.shape.visual_bounding_rect())
+                }
+                _ => None,
+            })
     }
 
     fn add(&mut self) {

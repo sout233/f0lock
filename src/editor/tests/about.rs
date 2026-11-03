@@ -26,7 +26,11 @@ fn about_links_and_contributor_rows_use_the_requested_destinations() {
             "Bilibili",
             "https://space.bilibili.com/393632577",
         ),
-        ("UnD3ath", "Bilibili", "https://space.bilibili.com/224632474"),
+        (
+            "UnD3ath",
+            "Bilibili",
+            "https://space.bilibili.com/224632474",
+        ),
         ("Alletis", "Website", "https://alletis.com"),
         (
             "lem0ncry",

@@ -64,13 +64,42 @@ impl F0Editor {
 
         draw_spectrum(&p, &plot, &self.telemetry.spectrum());
 
+        let layout_f0 = if v[2] > 0.0 { v[2] } else { PREVIEW_F0 };
+
+        // The audition window sits under the response curve so the curve stays
+        // readable, and only while a point is actually being listened to.
+        if self.listen
+            && let Some(index) = self.selected
+            && self.params.band(index).exists.value()
+        {
+            let band = self.params.band(index);
+            let center = (self.point_pitch(index, layout_f0) * band.ratio.value())
+                .min(plot.max_hz)
+                .max(20.0);
+            let half = self.audition.half_width().max(1.0);
+            let left = plot.x((center - half).max(20.0));
+            let right = plot.x((center + half).min(plot.max_hz));
+            let window = Rect::from_min_max(
+                Pos2::new(left, plot.rect.top()),
+                Pos2::new(right, plot.rect.bottom()),
+            );
+            p.rect_filled(window, 0.0, self.accent().gamma_multiply(0.10));
+            for edge in [left, right] {
+                p.line_segment(
+                    [
+                        Pos2::new(edge, window.top()),
+                        Pos2::new(edge, window.bottom()),
+                    ],
+                    Stroke::new(1.0, self.accent().gamma_multiply(0.38)),
+                );
+            }
+        }
+
         let bands = self.telemetry.bands();
 
         if v[7] > 0.0 {
             draw_response(&p, &plot, &bands, v[7], self.accent());
         }
-
-        let layout_f0 = if v[2] > 0.0 { v[2] } else { PREVIEW_F0 };
         let markers: [Option<Pos2>; BAND_COUNT] = std::array::from_fn(|i| {
             let b = self.params.band(i);
 
@@ -93,7 +122,10 @@ impl F0Editor {
                 .telemetry
                 .midi_active
                 .load(std::sync::atomic::Ordering::Relaxed);
-            let color = if !b.enabled.value() || (self.midi_per_point() && active & (1 << i) == 0) {
+            let listening_elsewhere = self.listen && self.selected.is_some_and(|s| s != i);
+            let color = if listening_elsewhere {
+                Color32::from_gray(72)
+            } else if !b.enabled.value() || (self.midi_per_point() && active & (1 << i) == 0) {
                 Color32::from_gray(91)
             } else {
                 POINT_COLORS[i]

@@ -60,7 +60,11 @@ fn drag_gain(fine: bool) -> f32 {
     let params = Arc::new(F0Params::default());
     let host = Arc::new(RecordingHost::default());
 
-    let mut editor = F0Editor::new(params.clone(), Arc::new(Telemetry::default()));
+    let mut editor = F0Editor::new(
+        params.clone(),
+        Arc::new(Telemetry::default()),
+        Arc::new(crate::Audition::default()),
+    );
     editor.gui = Some(GuiContext::new(host.clone()));
 
     let modifiers = egui::Modifiers {
@@ -144,7 +148,11 @@ fn control_click_resets_knob_through_host_gesture() {
 
     host.events.lock().unwrap().clear();
 
-    let mut editor = F0Editor::new(params.clone(), Arc::new(Telemetry::default()));
+    let mut editor = F0Editor::new(
+        params.clone(),
+        Arc::new(Telemetry::default()),
+        Arc::new(crate::Audition::default()),
+    );
     editor.gui = Some(gui);
 
     let modifiers = egui::Modifiers {

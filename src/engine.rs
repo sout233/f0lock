@@ -2,6 +2,7 @@ use crate::{
     analyzer::Analyzer,
     band::{BAND_COUNT, Band, BandControl},
     detector::{Detector, Estimate},
+    filter::{Coefficients, Svf},
     lookahead::{Decision, Lookahead, LookaheadTime},
     midi::{MidiMode, MidiTracker, PitchSource},
     mode::OperatingMode,
@@ -23,6 +24,12 @@ pub struct Controls {
     pub mix: f32,
     pub output_db: f32,
     pub bypass: bool,
+    /// Zero-based point being auditioned, if any: the output is narrowed to a
+    /// window around that point. The audio thread gets this from a shared
+    /// atomic rather than a parameter, so the host's parameter list is untouched.
+    pub audition: Option<usize>,
+    /// Half width of that window in hertz.
+    pub listen_half_width: f32,
 }
 
 impl Default for Controls {
@@ -48,9 +55,18 @@ impl Default for Controls {
             mix: 1.0,
             output_db: 0.0,
             bypass: false,
+            audition: None,
+            listen_half_width: LISTEN_HALF_WIDTH_DEFAULT,
         }
     }
 }
+
+/// Half the width of the audition window. The window is fixed in hertz rather
+/// than relative to the point, so a low point is heard as wide as a high one.
+pub const LISTEN_HALF_WIDTH_DEFAULT: f32 = 50.0;
+/// The editor lets this be dragged from a few hertz to most of an octave.
+pub const LISTEN_HALF_WIDTH_RANGE: [f32; 2] = [10.0, 500.0];
+const LISTEN_MIN_HZ: f32 = 20.0;
 
 pub struct Engine {
     pub mode: OperatingMode,
@@ -86,6 +102,7 @@ pub struct Engine {
     source_started: bool,
     detector_voiced: bool,
     prelocking: bool,
+    listen_filters: [Svf; 2],
 }
 
 impl Engine {
@@ -131,6 +148,7 @@ impl Engine {
             source_started: false,
             detector_voiced: false,
             prelocking: false,
+            listen_filters: [Svf::default(); 2],
         }
     }
 
@@ -416,6 +434,12 @@ impl Engine {
         let mut wet = input;
 
         let per_point = self.pitch_source == PitchSource::Midi && self.midi_mode != MidiMode::Mono;
+        // Audition narrows the finished output to the selected point's
+        // neighbourhood instead of muting the other points, so the range is
+        // heard exactly as the chain leaves it.
+        let audition = controls
+            .audition
+            .filter(|&index| index < BAND_COUNT && controls.bands[index].exists);
         for (i, (band, control)) in self.bands.iter_mut().zip(controls.bands).enumerate() {
             let mut envelope_steps = self.envelope_steps;
             if controls.infinite_release && control.exists && control.enabled {
@@ -447,8 +471,24 @@ impl Engine {
         self.q = self.bands[0].q;
 
         let output_gain = 10.0_f32.powf(self.output_db / 20.0);
+        // The audition window is centred on the point's own filter frequency, so
+        // the range is judged in place rather than by muting the rest of the
+        // chain. Its width is set from the strip and can be dragged.
+        let half_width = controls
+            .listen_half_width
+            .clamp(LISTEN_HALF_WIDTH_RANGE[0], LISTEN_HALF_WIDTH_RANGE[1]);
+        let listen = audition.map(|index| {
+            let center = self.bands[index]
+                .frequency
+                .clamp(LISTEN_MIN_HZ, self.sample_rate * 0.45);
+            Coefficients::bandpass(self.sample_rate, center, center / (2.0 * half_width))
+        });
         let output = std::array::from_fn(|ch| {
             let mixed = (input[ch] + self.mix * (wet[ch] - input[ch])) * output_gain;
+            let mixed = match listen {
+                Some(coefficients) => self.listen_filters[ch].process(mixed, coefficients),
+                None => mixed,
+            };
             input[ch] + (1.0 - self.bypass) * (mixed - input[ch])
         });
 

@@ -1,4 +1,4 @@
-use crate::{Telemetry, band::BAND_COUNT, filter::FilterKind, params::F0Params};
+use crate::{Audition, Telemetry, band::BAND_COUNT, filter::FilterKind, params::F0Params};
 use egui::{Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use nice_plug::{
     context::gui::{GuiContext, ParamSetter},
@@ -44,6 +44,11 @@ pub struct F0Editor {
     /// toggled": the knob follows the parameter, so projects already using
     /// Q Follow open with it visible.
     q_follow_open: [Option<bool>; BAND_COUNT],
+    /// Audition the selected point. Transient and per editor: the point is
+    /// republished every frame so it follows the selection, while the window
+    /// width is owned by [`Audition`] and changed by dragging the strip control.
+    listen: bool,
+    audition: Arc<Audition>,
 }
 
 struct Notice {
@@ -80,7 +85,11 @@ impl F0Editor {
         fallback
     }
 
-    pub(crate) fn new(params: Arc<F0Params>, telemetry: Arc<Telemetry>) -> Self {
+    pub(crate) fn new(
+        params: Arc<F0Params>,
+        telemetry: Arc<Telemetry>,
+        audition: Arc<Audition>,
+    ) -> Self {
         let selected = (0..BAND_COUNT).find(|&i| params.band(i).exists.value());
         let shown_mode = params.mode.value();
         Self {
@@ -98,6 +107,8 @@ impl F0Editor {
             mode_selection: [Some(0); 2],
             audio_open: false,
             q_follow_open: [None; BAND_COUNT],
+            listen: false,
+            audition,
         }
     }
 
@@ -126,6 +137,14 @@ impl F0Editor {
         {
             self.selected = (0..BAND_COUNT).find(|&i| self.params.band(i).exists.value());
         }
+
+        // The audio thread reads the auditioned point from here. Publishing it
+        // every frame keeps it attached to the current selection, including
+        // when the selected point is closed or the mode changes.
+        self.audition.set_point(match (self.listen, self.selected) {
+            (true, Some(index)) => Some(index),
+            _ => None,
+        });
 
         let v = self.telemetry.values();
         ui.ctx().style_mut_of(egui::Theme::Dark, |style| {
@@ -197,6 +216,13 @@ impl F0Editor {
         self.show_notice(ui.ctx(), canvas.min);
 
         self.show_about(ui.ctx());
+    }
+}
+
+impl Drop for F0Editor {
+    fn drop(&mut self) {
+        // Closing the window must not leave the instance auditioning silently.
+        self.audition.set_point(None);
     }
 }
 

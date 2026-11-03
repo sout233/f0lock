@@ -2,7 +2,7 @@ use super::*;
 use crate::{lookahead::LookaheadTime, midi::PitchSource, mode::OperatingMode};
 
 impl F0Editor {
-    pub(super) fn processing_bar(&self, ui: &mut egui::Ui, rect: Rect, values: &[f32; 10]) {
+    pub(super) fn processing_bar(&mut self, ui: &mut egui::Ui, rect: Rect, values: &[f32; 10]) {
         let Some(gui) = &self.gui else { return };
         let setter = gui.param_setter();
         let painter = ui.painter_at(rect);
@@ -37,6 +37,59 @@ impl F0Editor {
                 }
             }
         });
+
+        // Audition control: a click starts or stops it, a sideways drag sets how
+        // wide the listened window is. The width stays visible so it can be
+        // preset without switching the audition on.
+        let listen_on = self.listen;
+        let listen_id = ui.make_persistent_id("listen-band");
+        let listen_rect = Rect::from_min_size(
+            rect.right_top() + Vec2::new(-268.0, 4.0),
+            Vec2::new(116.0, 24.0),
+        );
+        let listen = ui
+            .interact(listen_rect, listen_id, Sense::click_and_drag())
+            .on_hover_cursor(egui::CursorIcon::ResizeHorizontal)
+            .on_hover_text("Click to audition the selected point, drag to change the width");
+
+        let mut half_width = self.audition.half_width();
+        if listen.dragged() {
+            // `drag_delta` is this frame's movement, so the width follows the
+            // pointer directly instead of tracking a drag origin.
+            let [low, high] = crate::engine::LISTEN_HALF_WIDTH_RANGE;
+            half_width = (half_width + listen.drag_delta().x * 2.0).clamp(low, high);
+            self.audition.set_half_width(half_width);
+        }
+
+        painter.rect_filled(
+            listen_rect,
+            4.0,
+            if listen_on {
+                accent.gamma_multiply(0.16)
+            } else {
+                Color32::from_gray(40)
+            },
+        );
+        painter.rect_stroke(
+            listen_rect,
+            4.0,
+            Stroke::new(
+                1.0,
+                if listen_on {
+                    accent.gamma_multiply(0.7)
+                } else {
+                    Color32::from_gray(73)
+                },
+            ),
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            listen_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            format!("Listen ±{half_width:.0} Hz"),
+            FontId::proportional(12.0),
+            if listen_on { TEXT } else { MUTED },
+        );
 
         let enabled = self.params.lookahead.value();
         let duration = self.params.lookahead_time.value();
@@ -120,6 +173,10 @@ impl F0Editor {
 
         if button.clicked() {
             set_value(&setter, &self.params.bypass, !bypass);
+        }
+
+        if listen.clicked() {
+            self.listen = !listen_on;
         }
     }
 }

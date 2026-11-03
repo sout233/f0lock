@@ -151,7 +151,11 @@ fn native_editor_reopen_keeps_host_size_and_content_scale_consistent() {
         RepaintNotifier::new(),
         crate::editor_settings(),
         Probe {
-            editor: F0Editor::new(params.clone(), Arc::new(Telemetry::default())),
+            editor: F0Editor::new(
+                params.clone(),
+                Arc::new(Telemetry::default()),
+                Arc::new(crate::Audition::default()),
+            ),
             metrics: metrics.clone(),
             #[cfg(feature = "dpi-trace")]
             configurations: configurations.clone(),
