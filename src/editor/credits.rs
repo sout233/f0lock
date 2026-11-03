@@ -33,20 +33,28 @@ impl F0Editor {
                 for (name, link) in [
                     (
                         "Icewatermelon233（谭荣熙竣）",
-                        Some("https://space.bilibili.com/393632577"),
+                        Some(("Bilibili", "https://space.bilibili.com/393632577")),
                     ),
-                    ("UnD3ath", Some("https://space.bilibili.com/224632474")),
+                    (
+                        "UnD3ath",
+                        Some(("Bilibili", "https://space.bilibili.com/224632474")),
+                    ),
                     ("荔枝fliz", None),
                     ("网友八顺千", None),
+                    ("Alletis", Some(("Website", "https://alletis.com"))),
+                    (
+                        "lem0ncry",
+                        Some(("Bilibili", "https://space.bilibili.com/1382426144")),
+                    ),
                 ] {
                     ui.horizontal(|ui| {
                         ui.set_min_height(22.0);
                         ui.label(egui::RichText::new(name).size(14.0));
-                        if let Some(link) = link {
+                        if let Some((label, link)) = link {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    ui.hyperlink_to("Bilibili", link);
+                                    ui.hyperlink_to(label, link);
                                 },
                             );
                         }

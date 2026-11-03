@@ -20,12 +20,19 @@ fn about_links_and_contributor_rows_use_the_requested_destinations() {
 
     f.click_text("鸣谢");
     f.frame(vec![]);
-    for (name, destination) in [
+    for (name, label, destination) in [
         (
             "Icewatermelon233（谭荣熙竣）",
+            "Bilibili",
             "https://space.bilibili.com/393632577",
         ),
-        ("UnD3ath", "https://space.bilibili.com/224632474"),
+        ("UnD3ath", "Bilibili", "https://space.bilibili.com/224632474"),
+        ("Alletis", "Website", "https://alletis.com"),
+        (
+            "lem0ncry",
+            "Bilibili",
+            "https://space.bilibili.com/1382426144",
+        ),
     ] {
         let bounds = f
             .shapes
@@ -42,7 +49,7 @@ fn about_links_and_contributor_rows_use_the_requested_destinations() {
             .iter()
             .find_map(|shape| match &shape.shape {
                 egui::Shape::Text(t)
-                    if t.galley.job.text == "Bilibili"
+                    if t.galley.job.text == label
                         && (shape.shape.visual_bounding_rect().center().y - bounds.center().y)
                             .abs()
                             < 5.0 =>
@@ -56,7 +63,12 @@ fn about_links_and_contributor_rows_use_the_requested_destinations() {
         f.click(link.center(), egui::PointerButton::Primary);
         assert_eq!(f.opened_urls.last().unwrap(), destination);
     }
-    assert!(f.shapes.iter().any(|shape| matches!(&shape.shape,
-        egui::Shape::Text(t) if t.galley.job.text == "荔枝fliz")));
+    for name in ["荔枝fliz", "Alletis", "lem0ncry"] {
+        assert!(
+            f.shapes.iter().any(|shape| matches!(&shape.shape,
+                egui::Shape::Text(t) if t.galley.job.text == name)),
+            "{name} is missing from the credits"
+        );
+    }
     assert!(f.host.events.lock().unwrap().is_empty());
 }

@@ -33,8 +33,10 @@ standalone isn't part of plugin packaging and compiles extra audio I/O crates.
 
 ## credits
 
-- Icewatermelon233（谭荣熙竣）
+- [Icewatermelon233（谭荣熙竣）](https://space.bilibili.com/393632577)
 - 网友八顺千
+- [Alletis](https://alletis.com)
+- [lem0ncry](https://space.bilibili.com/1382426144)
 
 ![网友八顺千](assets/credits/bashunqian.png)
 
